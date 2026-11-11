@@ -6,7 +6,16 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true, "bundleIdentifier": "app.wird.mobile" },
-    "android": { "package": "app.wird.mobile" }
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.wird.mobile"
+    },
+    "android": {
+      "package": "app.wird.mobile"
+    },
+    "plugins": [
+      "expo-audio",
+      "expo-status-bar"
+    ]
   }
 }
