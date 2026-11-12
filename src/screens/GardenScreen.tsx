@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Garden3D from '../components/Garden3D';
+import GardenStats from '../components/GardenStats';
 import PlantShelf from '../components/PlantShelf';
 import { RedTreeScene } from '../components/RedTree';
 import { plantName, type PlantId } from '../plants/catalog';
@@ -55,7 +56,7 @@ const HizbRow = memo(function HizbRow({
 export default function GardenScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { ready, treeUnlocked, unlockTree, stageOf, counts, streak, growth, placed, plant, uproot } = useGarden();
+  const { ready, treeUnlocked, unlockTree, stageOf, counts, streak, bestStreak, activeDays, growth, placed, plant, uproot } = useGarden();
   const [picked, setPicked] = useState<PlantId | null>(null);
   const [note, setNote] = useState('');
   const armed = picked !== null;
@@ -64,7 +65,22 @@ export default function GardenScreen() {
   const [selected, setSelected] = useState(thumnIndex);
 
   const cell = Math.floor((width - 32 - 8) / PER_ROW);
-  const planted = THUMN_COUNT - counts[0];
+  const planted = placed.filter(Boolean).length;
+  const stats = useMemo(
+    () => ({
+      blooming: counts[MAX_STAGE],
+      totalThumns: THUMN_COUNT,
+      growing: counts[1] + counts[2] + counts[3],
+      hizbsDone: growth.filter((g) => g === PER_ROW).length,
+      hizbTotal: HIZB_COUNT,
+      planted,
+      slots: placed.length,
+      streak,
+      bestStreak,
+      activeDays,
+    }),
+    [counts, growth, planted, placed.length, streak, bestStreak, activeDays],
+  );
 
   // one stages array per hizb; only rows whose plants changed get new arrays
   const rows = useMemo(
@@ -112,12 +128,7 @@ export default function GardenScreen() {
         ListHeaderComponent={
           <View>
             <Text style={styles.title}>الحديقة</Text>
-            <View style={styles.stats}>
-              <Stat value={counts[MAX_STAGE]} label="Blooming" />
-              <Stat value={planted} label="Planted" />
-              <Stat value={streak} label="Day streak" />
-              <Stat value={`${Math.round((counts[MAX_STAGE] / THUMN_COUNT) * 100)}%`} label="Of Quran" />
-            </View>
+            <GardenStats d={stats} />
             <View style={styles.island}>
               <Garden3D placed={placed} width={Math.min(width - 32, 440)} armed={armed} onSlot={onSlot} />
             </View>
@@ -156,22 +167,9 @@ export default function GardenScreen() {
   );
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.paper },
   title: { fontSize: 28, color: colors.accent, textAlign: 'center', fontWeight: '600' },
-  stats: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, backgroundColor: colors.paleGreen, borderRadius: 16, paddingVertical: 10 },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '700', color: colors.darkGreen },
-  statLabel: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.darkGreen, marginHorizontal: 20, marginTop: 8, marginBottom: 8 },
   unlock: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper, paddingHorizontal: 12 },

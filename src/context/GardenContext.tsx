@@ -23,6 +23,9 @@ type Value = {
   /** number of thumns at each stage, index = stage */
   counts: number[];
   streak: number;
+  /** longest run of consecutive days with progress, and the number of days with any progress */
+  bestStreak: number;
+  activeDays: number;
   /** finished thumns (0..8) in each hizb: the growth step of that hizb's plant */
   growth: number[];
   /** the maple is always yours once gifted; a flower unlocks when its whole hizb is finished */
@@ -43,6 +46,8 @@ const Ctx = createContext<Value>({
   water: () => {},
   counts: [THUMN_COUNT, 0, 0, 0, 0],
   streak: 0,
+  bestStreak: 0,
+  activeDays: 0,
   growth: Array(HIZB_COUNT).fill(0),
   isUnlocked: () => false,
   placed: emptyPlaced(),
@@ -52,6 +57,19 @@ const Ctx = createContext<Value>({
 
 const dayKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function computeBest(days: string[]): number {
+  const sorted = [...new Set(days)].sort();
+  let best = 0, run = 0, prev: Date | null = null;
+  for (const k of sorted) {
+    const [y, m, d] = k.split('-').map(Number);
+    const cur = new Date(y, m - 1, d);
+    run = prev && Math.round((cur.getTime() - prev.getTime()) / 86400000) === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = cur;
+  }
+  return best;
+}
 
 function computeStreak(days: string[]): number {
   const set = new Set(days);
@@ -132,6 +150,8 @@ export function GardenProvider({ children }: { children: ReactNode }) {
       water,
       counts,
       streak: computeStreak(s.days),
+      bestStreak: computeBest(s.days),
+      activeDays: new Set(s.days).size,
       growth,
       isUnlocked,
       placed: s.placed,
