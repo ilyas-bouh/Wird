@@ -24,10 +24,10 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
   const a = Math.floor(width / (2 * N)); // half tile width
   const h = a / 2;
   const cx = width / 2;
-  const top = a * 2.6; // headroom for tall plants
+  const top = a * 3.4; // headroom for tall plants
   const band = a * 0.18; // green lip
   const depth = a * 0.7; // total thickness
-  const height = top + N * a + depth + 12;
+  const height = top + N * a + depth + 20;
   const k = a / 46; // plant art scale
 
   const pt = (i: number, j: number) => ({ x: cx + (i - j) * a, y: top + (i + j) * h });

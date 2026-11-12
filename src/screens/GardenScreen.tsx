@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 20, fontWeight: '700', color: colors.darkGreen },
   statLabel: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center', backgroundColor: '#EAF6FB', borderRadius: 20, overflow: 'hidden' },
+  island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.darkGreen, marginHorizontal: 20, marginTop: 8, marginBottom: 8 },
   tray: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 4 },
   chip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: colors.paleGreen },
