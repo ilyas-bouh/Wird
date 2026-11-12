@@ -45,12 +45,12 @@ const Card = memo(function Card({
   return (
     <Pressable onPress={() => onPick(id, unlocked)} style={[styles.card, picked && styles.cardOn, !unlocked && styles.cardLocked]}>
       <View style={!unlocked && styles.dim}>
-        <Svg width={54} height={58} viewBox="-60 -122 120 130">
+        <Svg width={54} height={58} viewBox="-65 -138 130 140">
           {id === MAPLE ? (
             <G transform="scale(0.4) translate(-150 -288)">
               <RedTreeArt t={0} />
             </G>
-          ) : <PlantArt id={id} stage={unlocked ? FULL_GROWTH : grown} />}
+          ) : <PlantArt id={id} stage={FULL_GROWTH} />}
         </Svg>
       </View>
       <Text style={styles.name} numberOfLines={1}>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   card: { width: 78, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: colors.paleGreen },
   cardOn: { borderColor: colors.accent, backgroundColor: colors.paleGreen },
   cardLocked: { backgroundColor: '#F4F7F2' },
-  dim: { opacity: 0.35 },
+  dim: { opacity: 0.8, filter: 'grayscale(0.8)' },
   name: { fontSize: 11, color: colors.textMuted, marginTop: 2, maxWidth: 70 },
   progress: { fontSize: 11, fontWeight: '700', color: colors.darkGreen },
   lock: { position: 'absolute', top: 6, right: 6 },
