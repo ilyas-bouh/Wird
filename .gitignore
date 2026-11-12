@@ -9,3 +9,8 @@ web-build/
 *.p12
 *.key
 *.mobileprovision
+
+# local dataset + build artifacts
+/data/
+__pycache__/
+*.pyc
