@@ -1,6 +1,8 @@
 import { memo, useMemo } from 'react';
+import { Pressable, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
 import SpeciesArt from './SpeciesArt';
+import { RedTreeScene } from './RedTree';
 import type { SpeciesId } from '../lib/species';
 
 const N = 5; // 5x5 island
@@ -53,8 +55,15 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width]);
 
+  // The maple animates, so it lives in its own small <Svg> that redraws on its own clock while the island stays still.
+  const maples = order.filter(({ slot }) => placed[slot] === 'maple');
+  const frontDepth = maples.length ? Math.min(...maples.map(({ i, j }) => i + j)) : Infinity;
+  const s = 0.4 * k; // maple art scale: its 340x300 box shrunk to island size
+  const viewBox = `-20 0 ${width + 40} ${height}`;
+
   return (
-    <Svg width={width} height={height} viewBox={`-20 0 ${width + 40} ${height}`}>
+    <View style={{ width, height }}>
+    <Svg width={width} height={height} viewBox={viewBox}>
       <Defs>
         <LinearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#6FD27F" />
@@ -93,7 +102,7 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
               strokeWidth={1.5}
               strokeDasharray="4 3"
             />
-            {sp && (
+            {sp && sp !== 'maple' && (
               <G transform={`translate(${c.x} ${c.y + h * 0.35}) scale(${k})`}>
                 <SpeciesArt species={sp} />
               </G>
@@ -102,6 +111,36 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
         );
       })}
     </Svg>
+
+    {maples.map(({ i, j, slot }) => {
+      const c = pt(i + 0.5, j + 0.5);
+      return (
+        <Pressable
+          key={slot}
+          onPress={() => onSlot(slot)}
+          style={{ position: 'absolute', left: c.x + 20 - 170 * s, top: c.y + h * 0.35 - 288 * s }}
+        >
+          <RedTreeScene width={340 * s} />
+        </Pressable>
+      );
+    })}
+
+    {/* plants standing in front of a maple are drawn again on top of it */}
+    {maples.length > 0 && (
+      <Svg width={width} height={height} viewBox={viewBox} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+        {order.map(({ i, j, slot }) => {
+          const sp = placed[slot];
+          if (!sp || sp === 'maple' || i + j <= frontDepth) return null;
+          const c = pt(i + 0.5, j + 0.5);
+          return (
+            <G key={slot} transform={`translate(${c.x} ${c.y + h * 0.35}) scale(${k})`}>
+              <SpeciesArt species={sp} />
+            </G>
+          );
+        })}
+      </Svg>
+    )}
+    </View>
   );
 }
 

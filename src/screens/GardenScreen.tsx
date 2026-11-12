@@ -118,7 +118,7 @@ export default function GardenScreen() {
                     onPress={() => setPicked(on ? null : sp.id)}
                     style={[styles.chip, on && styles.chipOn, n === 0 && styles.chipEmpty]}
                   >
-                    <Svg width={44} height={52} viewBox="-50 -118 100 126">
+                    <Svg width={48} height={52} viewBox="-60 -118 120 126">
                       <SpeciesArt species={sp.id} />
                     </Svg>
                     <Text style={styles.chipName}>{sp.name}</Text>
