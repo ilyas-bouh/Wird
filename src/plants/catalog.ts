@@ -3,12 +3,16 @@
  * step (8 steps, sprout to bouquet), and finishing the hizb unlocks it. Rename freely; the order matters.
  */
 export const PLANT_NAMES = [
-  'Rose', 'Lily', 'Tulip', 'Daisy', 'Sunflower', 'Lavender', 'Jasmine', 'Orchid', 'Peony', 'Iris',
-  'Lotus', 'Poppy', 'Marigold', 'Daffodil', 'Hyacinth', 'Carnation', 'Camellia', 'Magnolia', 'Hibiscus', 'Dahlia',
-  'Zinnia', 'Cosmos', 'Anemone', 'Violet', 'Freesia', 'Gardenia', 'Lilac', 'Wisteria', 'Foxglove', 'Snapdragon',
-  'Primrose', 'Buttercup', 'Bluebell', 'Chrysanthemum', 'Gerbera', 'Begonia', 'Petunia', 'Pansy', 'Azalea', 'Hydrangea',
-  'Crocus', 'Aster', 'Clematis', 'Delphinium', 'Edelweiss', 'Forget-me-not', 'Geranium', 'Heather', 'Ixia', 'Jonquil',
-  'Kalmia', 'Lupine', 'Mimosa', 'Narcissus', 'Oleander', 'Phlox', 'Ranunculus', 'Salvia', 'Verbena', 'Yarrow',
+  'Rose', 'Pink Lotus', 'Mint', 'Prickly Pear', 'Allium', 'Azalea',
+  'Bellflower', 'Bird of Paradise', 'Blue Oak', 'Calendula', 'Chinese Bamboo', 'Dahlia',
+  'Dancing Lady Orchid', 'Dandelion', 'Flaming Katy', 'Hyacinth', 'Chrysanthemum', 'Iris',
+  'Juniper', 'Moth Orchid', 'Oak', 'Persimmon', 'Pink Oak', 'Purple Oak',
+  'Red Spider Lily', 'Royal Poinciana', 'Snowdrop', 'White Calla Lily', 'Wishing Flower', 'Witch Mushroom',
+  'White Rose', 'Sunrise Rose', 'Peony', 'Camellia', 'Ranunculus', 'Tulip',
+  'Crocus', 'Magnolia', 'Blue Lotus', 'Water Lily', 'Sunflower', 'Gerbera',
+  'Cosmos', 'Zinnia', 'Chamomile', 'Purple Aster', 'Lavender', 'Delphinium',
+  'Foxglove', 'Bluebell', 'Hydrangea', 'Tiger Lily', 'Hibiscus', 'Daffodil',
+  'Cherry Blossom', 'Lemon Tree', 'Barrel Cactus', 'Saguaro', 'Echeveria', 'Red Toadstool',
 ] as const;
 
 export const HIZB_COUNT = PLANT_NAMES.length; // 60

@@ -1,8 +1,8 @@
 import { memo, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { ClipPath, Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
-import PlantArt from '../plants/PlantArt';
-import { FULL_GROWTH, MAPLE, type PlantId } from '../plants/catalog';
+import AnimatedPlant from '../plants/AnimatedPlant';
+import { MAPLE, type PlantId } from '../plants/catalog';
 import { RedTreeScene } from './RedTree';
 
 const N = 5; // 5x5 island
@@ -117,8 +117,6 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
     return pts(list);
   };
 
-  const maples = order.filter(({ slot }) => placed[slot] === MAPLE);
-  const frontDepth = maples.length ? Math.min(...maples.map(({ i, j }) => i + j)) : Infinity;
   const s = 0.4 * k; // maple art scale: its 340x300 box shrunk to island size
   const viewBox = `-20 0 ${width + 40} ${height}`;
   const diamond = pts([Nn, E, S, W]);
@@ -197,45 +195,39 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
               />
-              {id && id !== MAPLE && (
-                <G transform={`translate(${c.x} ${c.y + h * 0.35}) scale(${k})`}>
-                  <PlantArt id={id} stage={FULL_GROWTH} />
-                </G>
-              )}
             </G>
           );
         })}
       </Svg>
 
-      {/* The maple animates, so it lives in its own view that moves on the native thread. */}
-      {maples.map(({ i, j, slot }) => {
+      {/* Everything planted animates (the maple sways, flowers bend in the wind and shed petals), so each lives in its
+          own native-driven view. They are drawn back to front so a plant stands in front of the ones behind it. */}
+      {order.map(({ i, j, slot }) => {
+        const id = placed[slot];
+        if (!id) return null;
         const c = pt(i + 0.5, j + 0.5);
+        if (id === MAPLE) {
+          return (
+            <Pressable
+              key={slot}
+              onPress={() => onSlot(slot)}
+              style={{ position: 'absolute', left: c.x + 20 - 170 * s, top: c.y + h * 0.35 - 288 * s }}
+            >
+              <RedTreeScene width={340 * s} />
+            </Pressable>
+          );
+        }
+        const pw = 120 * k;
         return (
           <Pressable
             key={slot}
             onPress={() => onSlot(slot)}
-            style={{ position: 'absolute', left: c.x + 20 - 170 * s, top: c.y + h * 0.35 - 288 * s }}
+            style={{ position: 'absolute', left: c.x + 20 - 60 * k, top: c.y + h * 0.35 - 122 * k }}
           >
-            <RedTreeScene width={340 * s} />
+            <AnimatedPlant id={id} width={pw} />
           </Pressable>
         );
       })}
-
-      {/* plants standing in front of a maple are drawn again on top of it */}
-      {maples.length > 0 && (
-        <Svg width={width + 40} height={height} viewBox={viewBox} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
-          {order.map(({ i, j, slot }) => {
-            const id = placed[slot];
-            if (!id || id === MAPLE || i + j <= frontDepth) return null;
-            const c = pt(i + 0.5, j + 0.5);
-            return (
-              <G key={slot} transform={`translate(${c.x} ${c.y + h * 0.35}) scale(${k})`}>
-                <PlantArt id={id} stage={FULL_GROWTH} />
-              </G>
-            );
-          })}
-        </Svg>
-      )}
     </View>
   );
 }
