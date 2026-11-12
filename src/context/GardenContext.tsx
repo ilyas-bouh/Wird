@@ -1,17 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SPECIES, speciesForThumn, type SpeciesId } from '../lib/species';
+import { HIZB_COUNT, MAPLE, THUMNS_PER_HIZB, hizbOf, type PlantId } from '../plants/catalog';
 
-export const THUMN_COUNT = 480;
-/** 0 = unread ... 4 = finished. Reaching 4 for the first time earns a plant. */
+export const THUMN_COUNT = HIZB_COUNT * THUMNS_PER_HIZB; // 480
+/** 0 = unread ... 4 = finished. A hizb's plant grows one step per finished thumn. */
 export const MAX_STAGE = 4;
 export const SLOTS = 25; // 5x5 island
-const KEY = 'garden.v2';
+const KEY = 'garden.v3';
+const OLD_KEY = 'garden.v2';
 
-type Inventory = Record<SpeciesId, number>;
-type Placed = (SpeciesId | null)[];
-
-type Saved = { treeUnlocked: boolean; stages: Record<number, number>; earned: Record<number, true>; inventory: Inventory; placed: Placed; days: string[] };
+type Placed = (PlantId | null)[];
+type Saved = { treeUnlocked: boolean; stages: Record<number, number>; placed: Placed; days: string[] };
 
 type Value = {
   ready: boolean;
@@ -19,20 +18,21 @@ type Value = {
   treeUnlocked: boolean;
   unlockTree: () => void;
   stageOf: (thumnIndex: number) => number;
+  /** advance one stage (wraps back to 0 after finishing so a mistake can be undone) */
   water: (thumnIndex: number) => void;
   /** number of thumns at each stage, index = stage */
   counts: number[];
   streak: number;
-  /** plants you own but haven't planted */
-  inventory: Inventory;
-  /** what is planted on each island slot */
+  /** finished thumns (0..8) in each hizb: the growth step of that hizb's plant */
+  growth: number[];
+  /** the maple is always yours once gifted; a flower unlocks when its whole hizb is finished */
+  isUnlocked: (id: PlantId) => boolean;
+  /** what is planted on each island slot (each plant can be planted once) */
   placed: Placed;
-  plant: (slot: number, species: SpeciesId) => void;
-  /** pick a plant back up into the inventory */
+  plant: (slot: number, id: PlantId) => void;
   uproot: (slot: number) => void;
 };
 
-const emptyInventory = (): Inventory => ({ daffodil: 0, hydrangea: 0, cosmos: 0, maple: 0 });
 const emptyPlaced = (): Placed => Array(SLOTS).fill(null);
 
 const Ctx = createContext<Value>({
@@ -43,7 +43,8 @@ const Ctx = createContext<Value>({
   water: () => {},
   counts: [THUMN_COUNT, 0, 0, 0, 0],
   streak: 0,
-  inventory: emptyInventory(),
+  growth: Array(HIZB_COUNT).fill(0),
+  isUnlocked: () => false,
   placed: emptyPlaced(),
   plant: () => {},
   uproot: () => {},
@@ -65,23 +66,22 @@ function computeStreak(days: string[]): number {
 }
 
 export function GardenProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<Saved>({ treeUnlocked: false, stages: {}, earned: {}, inventory: emptyInventory(), placed: emptyPlaced(), days: [] });
+  const [s, setS] = useState<Saved>({ treeUnlocked: false, stages: {}, placed: emptyPlaced(), days: [] });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const v: Partial<Saved> = JSON.parse(raw);
-        setS({
-          treeUnlocked: v.treeUnlocked ?? false,
-          stages: v.stages ?? {},
-          earned: v.earned ?? {},
-          inventory: { ...emptyInventory(), ...v.inventory },
-          placed: v.placed?.length === SLOTS ? v.placed : emptyPlaced(),
-          days: v.days ?? [],
-        });
-      })
+    (async () => {
+      const raw = (await AsyncStorage.getItem(KEY)) ?? (await AsyncStorage.getItem(OLD_KEY));
+      if (!raw) return;
+      const v = JSON.parse(raw);
+      setS({
+        treeUnlocked: v.treeUnlocked ?? false,
+        stages: v.stages ?? {},
+        // earlier saves held the old flower species; only the maple carries over
+        placed: Array.isArray(v.placed) && v.placed.length === SLOTS ? v.placed.map((p: string | null) => (p === MAPLE || (p && /^h\d+$/.test(p)) ? p : null)) : emptyPlaced(),
+        days: v.days ?? [],
+      });
+    })()
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);
@@ -96,17 +96,12 @@ export function GardenProvider({ children }: { children: ReactNode }) {
       const stages = { ...p.stages };
       if (next === 0) delete stages[i];
       else stages[i] = next;
-      let { earned, inventory, days } = p;
+      let { days } = p;
       if (next > 0) {
         const today = dayKey(new Date());
         if (!days.includes(today)) days = [...days.slice(-400), today];
       }
-      if (next === MAX_STAGE && !earned[i]) {
-        earned = { ...earned, [i]: true };
-        const sp = speciesForThumn(i);
-        inventory = { ...inventory, [sp]: inventory[sp] + 1 };
-      }
-      return { ...p, stages, earned, inventory, days };
+      return { ...p, stages, days };
     });
   }, []);
 
@@ -114,35 +109,21 @@ export function GardenProvider({ children }: { children: ReactNode }) {
     setS((p) => {
       if (p.treeUnlocked) return p;
       const centre = Math.floor(SLOTS / 2);
-      if (p.placed[centre]) return { ...p, treeUnlocked: true, inventory: { ...p.inventory, maple: p.inventory.maple + 1 } };
       const placed = [...p.placed];
-      placed[centre] = 'maple';
+      if (!placed[centre] && !placed.includes(MAPLE)) placed[centre] = MAPLE;
       return { ...p, treeUnlocked: true, placed };
-    });
-  }, []);
-
-  const plant = useCallback((slot: number, species: SpeciesId) => {
-    setS((p) => {
-      if (p.placed[slot] || p.inventory[species] < 1) return p;
-      const placed = [...p.placed];
-      placed[slot] = species;
-      return { ...p, placed, inventory: { ...p.inventory, [species]: p.inventory[species] - 1 } };
-    });
-  }, []);
-
-  const uproot = useCallback((slot: number) => {
-    setS((p) => {
-      const sp = p.placed[slot];
-      if (!sp) return p;
-      const placed = [...p.placed];
-      placed[slot] = null;
-      return { ...p, placed, inventory: { ...p.inventory, [sp]: p.inventory[sp] + 1 } };
     });
   }, []);
 
   const value = useMemo<Value>(() => {
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < THUMN_COUNT; i++) counts[s.stages[i] ?? 0]++;
+    const growth = Array.from({ length: HIZB_COUNT }, (_, h) => {
+      let n = 0;
+      for (let k = 0; k < THUMNS_PER_HIZB; k++) if ((s.stages[h * THUMNS_PER_HIZB + k] ?? 0) === MAX_STAGE) n++;
+      return n;
+    });
+    const isUnlocked = (id: PlantId) => (id === MAPLE ? s.treeUnlocked : growth[hizbOf(id)] === THUMNS_PER_HIZB);
     return {
       ready,
       treeUnlocked: s.treeUnlocked,
@@ -151,15 +132,33 @@ export function GardenProvider({ children }: { children: ReactNode }) {
       water,
       counts,
       streak: computeStreak(s.days),
-      inventory: s.inventory,
+      growth,
+      isUnlocked,
       placed: s.placed,
-      plant,
-      uproot,
+      plant: (slot, id) =>
+        setS((p) => {
+          const done = id === MAPLE ? p.treeUnlocked : (() => {
+            let n = 0;
+            for (let k = 0; k < THUMNS_PER_HIZB; k++) if ((p.stages[hizbOf(id) * THUMNS_PER_HIZB + k] ?? 0) === MAX_STAGE) n++;
+            return n === THUMNS_PER_HIZB;
+          })();
+          if (!done) return p;
+          // one of each: planting it somewhere new moves it
+          const placed = p.placed.map((x) => (x === id ? null : x));
+          placed[slot] = id;
+          return { ...p, placed };
+        }),
+      uproot: (slot) =>
+        setS((p) => {
+          if (!p.placed[slot]) return p;
+          const placed = [...p.placed];
+          placed[slot] = null;
+          return { ...p, placed };
+        }),
     };
-  }, [s, ready, water, plant, uproot, unlockTree]);
+  }, [s, ready, water, unlockTree]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export const useGarden = () => useContext(Ctx);
-export { SPECIES };

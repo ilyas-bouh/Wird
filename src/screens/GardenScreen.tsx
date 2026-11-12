@@ -1,11 +1,10 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg from 'react-native-svg';
 import Garden3D from '../components/Garden3D';
-import SpeciesArt from '../components/SpeciesArt';
+import PlantShelf from '../components/PlantShelf';
 import { RedTreeScene } from '../components/RedTree';
-import { SPECIES, type SpeciesId } from '../lib/species';
+import { plantName, type PlantId } from '../plants/catalog';
 import Plant from '../components/Plant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
 import { usePortion } from '../context/PortionContext';
@@ -59,9 +58,11 @@ const HizbRow = memo(function HizbRow({
 export default function GardenScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { ready, treeUnlocked, unlockTree, stageOf, water, counts, streak, inventory, placed, plant, uproot } = useGarden();
-  const [picked, setPicked] = useState<SpeciesId | null>(null);
-  const armed = picked !== null && inventory[picked] > 0;
+  const { ready, treeUnlocked, unlockTree, stageOf, water, counts, streak, growth, placed, plant, uproot } = useGarden();
+  const [picked, setPicked] = useState<PlantId | null>(null);
+  const [note, setNote] = useState('');
+  const armed = picked !== null;
+  const placedIds = useMemo(() => new Set(placed.filter((x): x is PlantId => !!x)), [placed]);
   const { thumnIndex, setThumnIndex, setMode } = usePortion();
   const [selected, setSelected] = useState(thumnIndex);
 
@@ -80,10 +81,29 @@ export default function GardenScreen() {
 
   const onSlot = useCallback(
     (slot: number) => {
-      if (placed[slot]) uproot(slot);
-      else if (picked && inventory[picked] > 0) plant(slot, picked);
+      if (placed[slot]) {
+        uproot(slot);
+      } else if (picked) {
+        plant(slot, picked);
+        setPicked(null);
+        setNote('');
+      }
     },
-    [placed, picked, inventory, plant, uproot],
+    [placed, picked, plant, uproot],
+  );
+
+  const onPick = useCallback(
+    (id: PlantId, unlocked: boolean) => {
+      if (unlocked) {
+        setPicked((p) => (p === id ? null : id));
+        setNote('');
+      } else {
+        const h = Number(id.slice(1));
+        setPicked(null);
+        setNote(`Finish Hizb ${h} to unlock the ${plantName(id)} (${growth[h - 1]}/8 thumns).`);
+      }
+    },
+    [growth],
   );
 
   const read = useCallback(() => {
@@ -107,28 +127,12 @@ export default function GardenScreen() {
             <View style={styles.island}>
               <Garden3D placed={placed} width={Math.min(width - 32, 440)} armed={armed} onSlot={onSlot} />
             </View>
-            <View style={styles.tray}>
-              {SPECIES.map((sp) => {
-                const n = inventory[sp.id];
-                const on = picked === sp.id && n > 0;
-                return (
-                  <Pressable
-                    key={sp.id}
-                    disabled={n === 0}
-                    onPress={() => setPicked(on ? null : sp.id)}
-                    style={[styles.chip, on && styles.chipOn, n === 0 && styles.chipEmpty]}
-                  >
-                    <Svg width={48} height={52} viewBox="-60 -118 120 126">
-                      <SpeciesArt species={sp.id} />
-                    </Svg>
-                    <Text style={styles.chipName}>{sp.name}</Text>
-                    <Text style={styles.chipCount}>x{n}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <PlantShelf growth={growth} treeUnlocked={treeUnlocked} placedIds={placedIds} picked={picked} onPick={onPick} />
             <Text style={styles.hint}>
-              {armed ? 'Tap an empty tile to plant it. Tap a planted flower to pick it up.' : 'Finish a thumn below to earn a plant, then choose it here.'}
+              {note ||
+                (armed
+                  ? `Tap an empty tile to plant the ${plantName(picked!)}. Tap a planted flower to pick it up.`
+                  : 'Finish all 8 thumns of a hizb to unlock its flower.')}
             </Text>
             <Text style={styles.sectionTitle}>Hizb by hizb</Text>
           </View>
@@ -198,12 +202,6 @@ const styles = StyleSheet.create({
   unlockTitle: { fontSize: 28, fontWeight: '700', color: '#B71C1C', marginTop: 4, marginBottom: 8 },
   unlockText: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginHorizontal: 28, marginTop: 8 },
   unlockBtn: { backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 18, marginTop: 24 },
-  tray: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 4 },
-  chip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: colors.paleGreen },
-  chipOn: { borderColor: colors.accent, backgroundColor: colors.paleGreen },
-  chipEmpty: { opacity: 0.45 },
-  chipName: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  chipCount: { fontSize: 14, fontWeight: '700', color: colors.darkGreen },
   hint: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginHorizontal: 24, marginTop: 8 },
   list: { paddingHorizontal: 16, paddingBottom: 24 },
   hizb: { marginBottom: 10 },
