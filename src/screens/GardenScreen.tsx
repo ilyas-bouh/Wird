@@ -8,13 +8,10 @@ import { plantName, type PlantId } from '../plants/catalog';
 import Plant from '../components/Plant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
 import { usePortion } from '../context/PortionContext';
-import { navigationRef } from '../lib/swipeNav';
-import { portionAt, surahName } from '../lib/ranges';
 import { colors } from '../theme/colors';
 
 const PER_ROW = 8;
 const HIZB_COUNT = THUMN_COUNT / PER_ROW;
-const STAGE_LABEL = ['Empty soil', 'Seed', 'Sprout', 'Growing', 'In bloom'];
 const hizbs = Array.from({ length: HIZB_COUNT }, (_, h) => h);
 
 const HizbRow = memo(function HizbRow({
@@ -58,19 +55,15 @@ const HizbRow = memo(function HizbRow({
 export default function GardenScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { ready, treeUnlocked, unlockTree, stageOf, water, counts, streak, growth, placed, plant, uproot } = useGarden();
+  const { ready, treeUnlocked, unlockTree, stageOf, counts, streak, growth, placed, plant, uproot } = useGarden();
   const [picked, setPicked] = useState<PlantId | null>(null);
   const [note, setNote] = useState('');
   const armed = picked !== null;
   const placedIds = useMemo(() => new Set(placed.filter((x): x is PlantId => !!x)), [placed]);
-  const { thumnIndex, setThumnIndex, setMode } = usePortion();
+  const { thumnIndex } = usePortion();
   const [selected, setSelected] = useState(thumnIndex);
 
   const cell = Math.floor((width - 32 - 8) / PER_ROW);
-  const stage = stageOf(selected);
-  const p = portionAt('thumn', selected);
-  const from = surahName(p.start.surah);
-  const to = surahName(p.end.surah);
   const planted = THUMN_COUNT - counts[0];
 
   // one stages array per hizb; only rows whose plants changed get new arrays
@@ -112,12 +105,6 @@ export default function GardenScreen() {
     },
     [growth],
   );
-
-  const read = useCallback(() => {
-    setMode('thumn');
-    setThumnIndex(selected);
-    navigationRef.isReady() && navigationRef.navigate('Reader');
-  }, [selected, setMode, setThumnIndex]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
@@ -165,23 +152,6 @@ export default function GardenScreen() {
           </Pressable>
         </View>
       </Modal>
-
-      <View style={[styles.sheet, { paddingBottom: 14 }]}>
-        <Plant stage={stage} size={52} />
-        <View style={styles.sheetText}>
-          <Text style={styles.sheetTitle}>Thumn {p.n} · Hizb {Math.floor(selected / PER_ROW) + 1}</Text>
-          <Text style={styles.sheetSub} numberOfLines={1}>
-            {from.en} {p.start.ayah} → {p.start.surah === p.end.surah ? '' : `${to.en} `}{p.end.ayah}
-          </Text>
-          <Text style={styles.sheetStage}>{STAGE_LABEL[stage]}</Text>
-        </View>
-        <Pressable style={[styles.btn, styles.btnGhost]} onPress={read}>
-          <Text style={styles.btnGhostText}>Read</Text>
-        </Pressable>
-        <Pressable style={styles.btn} onPress={() => water(selected)}>
-          <Text style={styles.btnText}>{stage === MAX_STAGE ? 'Reset' : stage === 3 ? 'Finish' : 'Water'}</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -218,26 +188,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', backgroundColor: '#F1F8EC', borderRadius: 12, padding: 4 },
   cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   cellSelected: { backgroundColor: colors.mint },
-  sheet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  sheetText: { flex: 1 },
-  sheetTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  sheetSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  sheetStage: { fontSize: 12, color: colors.accent, marginTop: 2, fontWeight: '600' },
-  btn: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
   btnText: { color: '#fff', fontWeight: '700' },
-  btnGhost: { backgroundColor: colors.paleGreen },
-  btnGhostText: { color: colors.accent, fontWeight: '700' },
 });
