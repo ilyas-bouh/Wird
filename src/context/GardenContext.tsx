@@ -11,10 +11,13 @@ const KEY = 'garden.v2';
 type Inventory = Record<SpeciesId, number>;
 type Placed = (SpeciesId | null)[];
 
-type Saved = { stages: Record<number, number>; earned: Record<number, true>; inventory: Inventory; placed: Placed; days: string[] };
+type Saved = { treeUnlocked: boolean; stages: Record<number, number>; earned: Record<number, true>; inventory: Inventory; placed: Placed; days: string[] };
 
 type Value = {
   ready: boolean;
+  /** the red maple gift is given the first time the garden is opened */
+  treeUnlocked: boolean;
+  unlockTree: () => void;
   stageOf: (thumnIndex: number) => number;
   water: (thumnIndex: number) => void;
   /** number of thumns at each stage, index = stage */
@@ -29,11 +32,13 @@ type Value = {
   uproot: (slot: number) => void;
 };
 
-const emptyInventory = (): Inventory => ({ daffodil: 0, hydrangea: 0, cosmos: 0 });
+const emptyInventory = (): Inventory => ({ daffodil: 0, hydrangea: 0, cosmos: 0, maple: 0 });
 const emptyPlaced = (): Placed => Array(SLOTS).fill(null);
 
 const Ctx = createContext<Value>({
   ready: false,
+  treeUnlocked: true,
+  unlockTree: () => {},
   stageOf: () => 0,
   water: () => {},
   counts: [THUMN_COUNT, 0, 0, 0, 0],
@@ -60,7 +65,7 @@ function computeStreak(days: string[]): number {
 }
 
 export function GardenProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<Saved>({ stages: {}, earned: {}, inventory: emptyInventory(), placed: emptyPlaced(), days: [] });
+  const [s, setS] = useState<Saved>({ treeUnlocked: false, stages: {}, earned: {}, inventory: emptyInventory(), placed: emptyPlaced(), days: [] });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -69,6 +74,7 @@ export function GardenProvider({ children }: { children: ReactNode }) {
         if (!raw) return;
         const v: Partial<Saved> = JSON.parse(raw);
         setS({
+          treeUnlocked: v.treeUnlocked ?? false,
           stages: v.stages ?? {},
           earned: v.earned ?? {},
           inventory: { ...emptyInventory(), ...v.inventory },
@@ -104,6 +110,17 @@ export function GardenProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const unlockTree = useCallback(() => {
+    setS((p) => {
+      if (p.treeUnlocked) return p;
+      const centre = Math.floor(SLOTS / 2);
+      if (p.placed[centre]) return { ...p, treeUnlocked: true, inventory: { ...p.inventory, maple: p.inventory.maple + 1 } };
+      const placed = [...p.placed];
+      placed[centre] = 'maple';
+      return { ...p, treeUnlocked: true, placed };
+    });
+  }, []);
+
   const plant = useCallback((slot: number, species: SpeciesId) => {
     setS((p) => {
       if (p.placed[slot] || p.inventory[species] < 1) return p;
@@ -128,6 +145,8 @@ export function GardenProvider({ children }: { children: ReactNode }) {
     for (let i = 0; i < THUMN_COUNT; i++) counts[s.stages[i] ?? 0]++;
     return {
       ready,
+      treeUnlocked: s.treeUnlocked,
+      unlockTree,
       stageOf: (i) => s.stages[i] ?? 0,
       water,
       counts,
@@ -137,7 +156,7 @@ export function GardenProvider({ children }: { children: ReactNode }) {
       plant,
       uproot,
     };
-  }, [s, ready, water, plant, uproot]);
+  }, [s, ready, water, plant, uproot, unlockTree]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

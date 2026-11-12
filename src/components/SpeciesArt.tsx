@@ -1,4 +1,5 @@
 import { G, Circle, Ellipse, Path } from 'react-native-svg';
+import RedTreeArt from './RedTree';
 import type { SpeciesId } from '../lib/species';
 
 /** Petal flower: `n` petals around (cx,cy). */
@@ -26,6 +27,14 @@ const STEM_L = '#66A845';
  * Swap for painted sprites later without touching the garden logic.
  */
 export default function SpeciesArt({ species }: { species: SpeciesId }) {
+  if (species === 'maple') {
+    return (
+      <G transform="scale(0.4) translate(-150 -288)">
+        <RedTreeArt t={0} />
+      </G>
+    );
+  }
+
   if (species === 'hydrangea') {
     const blooms: [number, number, number][] = [
       [0, -58, 26], [-24, -46, 18], [24, -46, 18], [-12, -78, 17], [14, -76, 17], [-34, -62, 13], [34, -62, 13], [0, -34, 16],

@@ -1,9 +1,10 @@
 import { memo, useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg from 'react-native-svg';
 import Garden3D from '../components/Garden3D';
 import SpeciesArt from '../components/SpeciesArt';
+import { RedTreeScene } from '../components/RedTree';
 import { SPECIES, type SpeciesId } from '../lib/species';
 import Plant from '../components/Plant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
@@ -58,7 +59,7 @@ const HizbRow = memo(function HizbRow({
 export default function GardenScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { stageOf, water, counts, streak, inventory, placed, plant, uproot } = useGarden();
+  const { ready, treeUnlocked, unlockTree, stageOf, water, counts, streak, inventory, placed, plant, uproot } = useGarden();
   const [picked, setPicked] = useState<SpeciesId | null>(null);
   const armed = picked !== null && inventory[picked] > 0;
   const { thumnIndex, setThumnIndex, setMode } = usePortion();
@@ -142,6 +143,18 @@ export default function GardenScreen() {
         )}
       />
 
+      <Modal visible={ready && !treeUnlocked} animationType="fade" transparent statusBarTranslucent>
+        <View style={styles.unlock}>
+          <Text style={styles.unlockKicker}>A gift for your garden</Text>
+          <Text style={styles.unlockTitle}>Red maple unlocked</Text>
+          <RedTreeScene width={Math.min(width - 24, 460)} />
+          <Text style={styles.unlockText}>Every thumn you finish grows your garden. Start with this tree.</Text>
+          <Pressable style={styles.unlockBtn} onPress={unlockTree}>
+            <Text style={styles.btnText}>Plant it in my garden</Text>
+          </Pressable>
+        </View>
+      </Modal>
+
       <View style={[styles.sheet, { paddingBottom: 14 }]}>
         <Plant stage={stage} size={52} />
         <View style={styles.sheetText}>
@@ -180,6 +193,11 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.darkGreen, marginHorizontal: 20, marginTop: 8, marginBottom: 8 },
+  unlock: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper, paddingHorizontal: 12 },
+  unlockKicker: { fontSize: 13, letterSpacing: 1, color: colors.textMuted, textTransform: 'uppercase' },
+  unlockTitle: { fontSize: 28, fontWeight: '700', color: '#B71C1C', marginTop: 4, marginBottom: 8 },
+  unlockText: { fontSize: 15, color: colors.textMuted, textAlign: 'center', marginHorizontal: 28, marginTop: 8 },
+  unlockBtn: { backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 18, marginTop: 24 },
   tray: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 4 },
   chip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: colors.paleGreen },
   chipOn: { borderColor: colors.accent, backgroundColor: colors.paleGreen },
