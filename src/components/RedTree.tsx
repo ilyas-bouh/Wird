@@ -1,26 +1,6 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo } from 'react';
+import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
-
-/** Seconds since mount, re-rendered about `fps` times a second. Drives the wind and falling leaves. */
-export function useClock(fps = 30) {
-  const [t, setT] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    let last = 0;
-    const start = Date.now();
-    const loop = () => {
-      const now = Date.now();
-      if (now - last >= 1000 / fps) {
-        last = now;
-        setT((now - start) / 1000);
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [fps]);
-  return t;
-}
 
 const rnd = (seed: number) => {
   const x = Math.sin(seed * 78.233 + 12.9898) * 43758.5453;
@@ -140,12 +120,129 @@ export default function RedTreeArt({ t = 0 }: { t?: number }) {
   );
 }
 
-/** The red tree on its own, animated and sized to `width`. */
-export function RedTreeScene({ width }: { width: number }) {
-  const t = useClock(30);
+const VIEWBOX = '-20 0 340 300';
+const trunkPaths = (
+  <>
+    <Path d="M137 288 C141 252 144 222 146 190 L158 190 C158 222 161 252 167 288 Z" fill="#DDD6CF" />
+    <Path d="M156 190 C158 222 161 252 167 288 L158 288 C154 252 152 222 150 190 Z" fill="#9C948C" />
+    <Path d="M146 260 L152 262 M148 236 L154 238 M147 212 L153 214" stroke="#4A3F3A" strokeWidth={1.4} />
+  </>
+);
+const circles = (blobs: Blob[], opacity = 1) =>
+  blobs.map((b, i) => <Circle key={i} cx={b.x} cy={b.y} r={b.r} fill={b.c} opacity={opacity} />);
+
+// Each layer is drawn once and then moved by the native animation driver, so the wind never touches the JS thread.
+const Layer = memo(function Layer({ kind, w, h }: { kind: 'ground' | 'back' | 'mid' | 'front'; w: number; h: number }) {
   return (
-    <Svg width={width} height={(width * 300) / 340} viewBox="-20 0 340 300">
-      <RedTreeArt t={t} />
+    <Svg width={w} height={h} viewBox={VIEWBOX}>
+      {kind === 'ground' && (
+        <>
+          <Ellipse cx={BASE_X} cy={BASE_Y} rx={118} ry={8} fill="#C62828" opacity={0.35} />
+          <Ellipse cx={BASE_X} cy={BASE_Y} rx={70} ry={4} fill="#8E0000" opacity={0.35} />
+          {trunkPaths}
+        </>
+      )}
+      {kind === 'back' && (
+        <>
+          {circles(BACK)}
+          {BRANCHES.map((d, i) => (
+            <Path key={i} d={d} stroke="#2A1717" strokeWidth={i < 6 ? 4.5 - (i % 2) : 2.2} fill="none" strokeLinecap="round" />
+          ))}
+        </>
+      )}
+      {kind === 'mid' && circles(MID)}
+      {kind === 'front' && (
+        <>
+          {circles(FRONT)}
+          {circles(SPECKS, 0.85)}
+        </>
+      )}
     </Svg>
+  );
+});
+
+const LeafSvg = memo(function LeafSvg({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size * 1.2} viewBox="-6 -7 12 14">
+      <Path d="M0 -6 C5 -3 5 3 0 7 C-5 3 -5 -3 0 -6Z" fill={color} />
+      <Path d="M0 -5 L0 6" stroke="#8E0000" strokeWidth={0.8} />
+    </Svg>
+  );
+});
+
+const NATIVE = { useNativeDriver: true } as const;
+
+/** 0 -> 1 -> 0 forever, eased like a breeze. */
+function useBreeze(ms: number) {
+  const v = useMemo(() => new Animated.Value(0), []);
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: ms, easing: Easing.inOut(Easing.sin), ...NATIVE }),
+        Animated.timing(v, { toValue: 0, duration: ms, easing: Easing.inOut(Easing.sin), ...NATIVE }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [v, ms]);
+  return v;
+}
+
+function SwayLayer({ kind, w, h, ms, deg, dx }: { kind: 'back' | 'mid' | 'front'; w: number; h: number; ms: number; deg: number; dx: number }) {
+  const v = useBreeze(ms);
+  const rotate = v.interpolate({ inputRange: [0, 1], outputRange: [`${-deg}deg`, `${deg}deg`] });
+  const translateX = v.interpolate({ inputRange: [0, 1], outputRange: [-dx, dx] });
+  return (
+    <Animated.View style={{ position: 'absolute', transform: [{ translateX }, { rotate }], transformOrigin: '50% 96%' }}>
+      <Layer kind={kind} w={w} h={h} />
+    </Animated.View>
+  );
+}
+
+function FallingLeaf({ leaf, s }: { leaf: (typeof LEAVES)[number]; s: number }) {
+  const v = useMemo(() => new Animated.Value(leaf.phase), [leaf.phase]);
+  useEffect(() => {
+    const dur = 1 / leaf.speed * 1000;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 0, duration: 0, ...NATIVE }),
+        Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.linear, ...NATIVE }),
+      ]),
+    );
+    const anim = Animated.sequence([Animated.timing(v, { toValue: 1, duration: (1 - leaf.phase) * dur, easing: Easing.linear, ...NATIVE }), loop]);
+    anim.start();
+    return () => anim.stop();
+  }, [v, leaf]);
+
+  const x0 = (leaf.x0 + 20) * s;
+  const drift = 16 * s;
+  const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [leaf.y0 * s, (BASE_Y - 4) * s] });
+  const translateX = v.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: [x0, x0 + drift + 10 * s, x0 + 18 * s, x0 + drift * 1.6 + 24 * s, x0 + 40 * s],
+  });
+  const rotate = v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${leaf.spin}deg`] });
+  const opacity = v.interpolate({ inputRange: [0, 0.1, 0.85, 1], outputRange: [0, 1, 1, 0] });
+  return (
+    <Animated.View style={{ position: 'absolute', left: 0, top: 0, opacity, transform: [{ translateX }, { translateY }, { rotate }] }}>
+      <LeafSvg size={12 * s * leaf.size} color={leaf.c} />
+    </Animated.View>
+  );
+}
+
+/** The red tree: a still trunk, three canopy layers swaying at different speeds, and falling leaves. All native-driven. */
+export function RedTreeScene({ width }: { width: number }) {
+  const h = (width * 300) / 340;
+  const s = width / 340;
+  return (
+    <View style={{ width, height: h }}>
+      <Layer kind="ground" w={width} h={h} />
+      <SwayLayer kind="back" w={width} h={h} ms={2600} deg={0.8} dx={2 * s} />
+      <SwayLayer kind="mid" w={width} h={h} ms={2200} deg={1.3} dx={4 * s} />
+      <SwayLayer kind="front" w={width} h={h} ms={1900} deg={1.8} dx={6 * s} />
+      {LEAVES.map((l, i) => (
+        <FallingLeaf key={i} leaf={l} s={s} />
+      ))}
+    </View>
   );
 }

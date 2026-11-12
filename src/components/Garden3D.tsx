@@ -62,8 +62,8 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
   const viewBox = `-20 0 ${width + 40} ${height}`;
 
   return (
-    <View style={{ width, height }}>
-    <Svg width={width} height={height} viewBox={viewBox}>
+    <View style={{ width: width + 40, height }}>
+    <Svg width={width + 40} height={height} viewBox={viewBox}>
       <Defs>
         <LinearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#6FD27F" />
@@ -127,7 +127,7 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
 
     {/* plants standing in front of a maple are drawn again on top of it */}
     {maples.length > 0 && (
-      <Svg width={width} height={height} viewBox={viewBox} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+      <Svg width={width + 40} height={height} viewBox={viewBox} pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
         {order.map(({ i, j, slot }) => {
           const sp = placed[slot];
           if (!sp || sp === 'maple' || i + j <= frontDepth) return null;
