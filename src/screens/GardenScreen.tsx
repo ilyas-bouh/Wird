@@ -79,6 +79,13 @@ export default function GardenScreen() {
     [stageOf],
   );
 
+  // only the hizb being read and the ones already finished, newest first
+  const currentHizb = Math.floor(thumnIndex / PER_ROW);
+  const visible = useMemo(
+    () => hizbs.filter((h) => h === currentHizb || rows[h].every((s) => s === MAX_STAGE)).sort((a, b) => b - a),
+    [rows, currentHizb],
+  );
+
   const onSlot = useCallback(
     (slot: number) => {
       if (placed[slot]) {
@@ -137,7 +144,7 @@ export default function GardenScreen() {
             <Text style={styles.sectionTitle}>Hizb by hizb</Text>
           </View>
         }
-        data={hizbs}
+        data={visible}
         keyExtractor={(h) => String(h)}
         initialNumToRender={8}
         windowSize={7}
