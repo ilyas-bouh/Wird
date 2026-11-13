@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Garden3D from '../components/Garden3D';
 import GardenStats from '../components/GardenStats';
@@ -9,7 +10,8 @@ import { plantName, type PlantId } from '../plants/catalog';
 import Plant from '../components/Plant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
 import { usePortion } from '../context/PortionContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 
 const PER_ROW = 8;
 const HIZB_COUNT = THUMN_COUNT / PER_ROW;
@@ -28,6 +30,8 @@ const HizbRow = memo(function HizbRow({
   cell: number;
   onSelect: (i: number) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const done = stages.filter((s) => s === MAX_STAGE).length;
   return (
     <View style={styles.hizb}>
@@ -54,6 +58,8 @@ const HizbRow = memo(function HizbRow({
 });
 
 export default function GardenScreen() {
+  const { colors, dark, toggle } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { ready, treeUnlocked, unlockTree, stageOf, counts, streak, bestStreak, activeDays, growth, placed, plant, uproot } = useGarden();
@@ -127,7 +133,21 @@ export default function GardenScreen() {
       <FlatList
         ListHeaderComponent={
           <View>
-            <Text style={styles.title}>الحديقة</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>الحديقة</Text>
+              <Pressable onPress={toggle} style={styles.themeBtn} accessibilityLabel={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+                <Svg width={20} height={20} viewBox="0 0 24 24">
+                  {dark ? (
+                    <>
+                      <Circle cx={12} cy={12} r={4.2} fill={colors.accent} />
+                      <Path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
+                    </>
+                  ) : (
+                    <Path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.7 6.7 0 0 0 10.6 10.6z" fill={colors.accent} />
+                  )}
+                </Svg>
+              </Pressable>
+            </View>
             <GardenStats d={stats} />
             <View style={styles.island}>
               <Garden3D placed={placed} width={Math.min(width - 32, 440)} armed={armed} onSlot={onSlot} />
@@ -167,8 +187,10 @@ export default function GardenScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.paper },
+  titleRow: { justifyContent: 'center' },
+  themeBtn: { position: 'absolute', right: 16, top: 0, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.paleGreen, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 28, color: colors.accent, textAlign: 'center', fontWeight: '600' },
   island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.darkGreen, marginHorizontal: 20, marginTop: 8, marginBottom: 8 },
@@ -183,8 +205,8 @@ const styles = StyleSheet.create({
   hizbHead: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 2 },
   hizbTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   hizbCount: { fontSize: 12, color: colors.textMuted },
-  row: { flexDirection: 'row', backgroundColor: '#F1F8EC', borderRadius: 12, padding: 4 },
+  row: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, padding: 4 },
   cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   cellSelected: { backgroundColor: colors.mint },
-  btnText: { color: '#fff', fontWeight: '700' },
+  btnText: { color: colors.onAccent, fontWeight: '700' },
 });

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, Easing, PanResponder, StyleSheet, useWindowDimensions } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 import { goSwipe, registerSwipeAnimator } from '../lib/swipeNav';
 
 /** Horizontal offset of the screen content; the tab bar reads it to stay fixed while screens slide. */
@@ -21,6 +22,8 @@ export function useSwipeX() {
  * alone so lists keep scrolling. The Reader's WebView reports its own swipes (no finger-follow there).
  */
 export default function SwipeNav({ children }: { children: ReactNode }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const x = useSwipeX() ?? new Animated.Value(0);
   const { width } = useWindowDimensions();
   const busy = useRef(false);
@@ -71,4 +74,4 @@ export default function SwipeNav({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({ fill: { flex: 1, backgroundColor: colors.paper } });
+const makeStyles = (colors: Palette) => StyleSheet.create({ fill: { flex: 1, backgroundColor: colors.paper } });

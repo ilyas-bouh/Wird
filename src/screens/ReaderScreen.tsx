@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StatusBar as RNStatusBar, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { setStatusBarHidden } from 'expo-status-bar';
@@ -7,11 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PageView, { type PageViewHandle } from '../components/PageView';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 import TafsirSheet, { SHEET_HEIGHT } from '../components/TafsirSheet';
 import { useFocusMode } from '../context/FocusContext';
 import { usePortion } from '../context/PortionContext';
-import { textStyleCss } from '../theme/reading';
+import { TEXT_STYLE, TEXT_STYLE_DARK, textStyleCss } from '../theme/reading';
 import { cropSvg, headerZones, selectRange } from '../lib/cropSvg';
 import { ayahKey, hasAudio, useAyahPlayer, type AyahRef } from '../lib/useAyahPlayer';
 import { portionAt } from '../lib/ranges';
@@ -30,7 +31,7 @@ async function loadSvg(module: number) {
   return new File(asset.localUri ?? asset.uri).text();
 }
 
-function buildHtml(svgs: string[], next: { label: string; enabled: boolean }) {
+function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, colors: Palette) {
   const pages = svgs.map((s) => `<section class="page">${s.replace(/<\?xml[^>]*\?>/, '')}</section>`).join('');
   const button = `<div class="next"><button id="next" ${next.enabled ? '' : 'disabled'}>${next.label}</button></div>`;
   return `<!DOCTYPE html><html><head>
@@ -40,10 +41,10 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }) {
   .page { padding: 0 10px; margin: 0; line-height: 0; }
   svg { display: block; width: 100%; height: auto; }
   svg path:not(.ayahPolygon) { pointer-events: none; }
-  #content, #ayah_markers { pointer-events: none; }${textStyleCss()}
+  #content, #ayah_markers { pointer-events: none; }${textStyleCss(colors.dark ? TEXT_STYLE_DARK : TEXT_STYLE)}
   .next { padding: 28px 24px 120px; text-align: center; }
   button { font-size: 17px; padding: 14px 28px; border: 0; border-radius: 999px;
-           background: ${colors.accent}; color: #fff; font-family: sans-serif; }
+           background: ${colors.accent}; color: ${colors.onAccent}; font-family: sans-serif; }
   button[disabled] { background: ${colors.mint}; color: ${colors.textMuted}; }
 </style></head><body>${pages}${button}
 <script>
@@ -61,7 +62,7 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }) {
   function paint(key, on) {
     var parts = key.split(':');
     document.querySelectorAll('.ayahPolygon[surah="' + parts[0] + '"][ayah="' + parts[1] + '"]').forEach(function (p) {
-      p.setAttribute('fill', '#2E7D32');
+      p.setAttribute('fill', '${colors.accent}');
       p.setAttribute('fill-opacity', on ? '0.22' : '0');
     });
   }
@@ -97,6 +98,8 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }) {
 }
 
 export default function ReaderScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { thumnIndex: index, setThumnIndex: setIndex, mode } = usePortion(); // portion setting, shared with the Tafsir tab
   const step = mode === 'rub' ? 2 : 1; // thumn steps per portion
   const [html, setHtml] = useState<string | null>(null);
@@ -159,7 +162,7 @@ export default function ReaderScreen() {
             : `${noun[0].toUpperCase()}${noun.slice(1)} ${next.n}: pages not bundled yet`;
         if (!cancelled) {
           setAyahs(list);
-          setHtml(buildHtml(out, { label, enabled: hasNext }));
+          setHtml(buildHtml(out, { label, enabled: hasNext }, colors));
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -169,7 +172,7 @@ export default function ReaderScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, mode]);
+  }, [index, mode, colors]);
 
   const onMessage = (msg: string) => {
     if (msg === 'next') setIndex((i) => Math.floor(i / step) * step + step);
@@ -233,7 +236,7 @@ export default function ReaderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.paper },
   web: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper, padding: 24 },
@@ -253,5 +256,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   fabSmall: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.darkGreen },
-  fabText: { color: '#fff', fontSize: 20 },
+  fabText: { color: colors.onAccent, fontSize: 20 },
 });

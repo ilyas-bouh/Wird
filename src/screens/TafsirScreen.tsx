@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StatusBar as RNStatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import { usePortion } from '../context/PortionContext';
 import { ayahsInPortion, portionAt, surahName, type AyahPos } from '../lib/ranges';
@@ -34,6 +35,8 @@ function buildSections(ayahs: AyahPos[]): Section[] {
 
 /** Full tafsir (Al-Muyassar / Al-Mukhtasar) of the whole thomon or rub' the Reader is on. */
 export default function TafsirScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { thumnIndex, mode } = usePortion(); // follows the Reader and the portion setting
   const [lang, setLang] = useState<TafsirLang>('ar');
@@ -125,6 +128,8 @@ function Segmented({
   onChange: (v: string) => void;
   options: { id: string; text: string }[];
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.seg}>
       {options.map((o) => (
@@ -136,7 +141,7 @@ function Segmented({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   content: { paddingHorizontal: 16 },
   hero: { backgroundColor: colors.paleGreen, borderRadius: 20, padding: 18, marginBottom: 8 },
@@ -144,13 +149,13 @@ const styles = StyleSheet.create({
   range: { marginTop: 6, fontSize: 18, fontFamily: fonts.ar, color: colors.text, textAlign: 'right', writingDirection: 'rtl', lineHeight: 32 },
   meta: { marginTop: 2, fontSize: 15, fontFamily: fonts.ar, color: colors.textMuted, textAlign: 'right', writingDirection: 'rtl' },
   row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 10 },
-  seg: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, padding: 3 },
+  seg: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 14, padding: 3 },
   segItem: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 11 },
   segActive: { backgroundColor: colors.accent },
   segText: { color: colors.textMuted, fontSize: 14 },
-  segTextActive: { color: '#fff', fontWeight: '600' },
+  segTextActive: { color: colors.onAccent, fontWeight: '600' },
   surah: { marginTop: 18, marginBottom: 6, fontSize: 19, fontFamily: fonts.arSemi, color: colors.accent, textAlign: 'center' },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 14, marginTop: 10, borderWidth: 1, borderColor: colors.paleGreen },
+  card: { backgroundColor: colors.card, borderRadius: 16, padding: 14, marginTop: 10, borderWidth: 1, borderColor: colors.paleGreen },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   chip: { backgroundColor: colors.mint, color: colors.darkGreen, fontFamily: fonts.arSemi, fontSize: 14, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, overflow: 'hidden' },
   text: { color: colors.text, fontSize: 16, lineHeight: 26 },

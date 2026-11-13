@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import { EDITIONS, getTafsir, type TafsirLang, type TafsirSection } from '../lib/tafsir';
 
@@ -11,6 +12,8 @@ type Props = { ayahKey: string | null; onClose: () => void };
 
 /** Bottom drawer with the tafsir of the tapped ayah: Al-Muyassar (Arabic) or Al-Mukhtasar (English). */
 export default function TafsirSheet({ ayahKey, onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [lang, setLang] = useState<TafsirLang>('ar');
   const [sections, setSections] = useState<TafsirSection[] | null>(null);
@@ -80,7 +83,7 @@ export default function TafsirSheet({ ayahKey, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     left: 0,
@@ -99,10 +102,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, gap: 10 },
   title: { flex: 1, color: colors.darkGreen, fontWeight: '600', fontSize: 15 },
   langs: { flexDirection: 'row', gap: 6 },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#fff' },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: colors.card },
   pillActive: { backgroundColor: colors.accent },
   pillText: { color: colors.textMuted, fontSize: 13 },
-  pillTextActive: { color: '#fff' },
+  pillTextActive: { color: colors.onAccent },
   close: { fontSize: 18, color: colors.textMuted, paddingLeft: 6 },
   body: { paddingHorizontal: 18, paddingBottom: 24 },
   text: { color: colors.text, fontSize: 16, lineHeight: 26 },

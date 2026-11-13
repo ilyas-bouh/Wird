@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Animated, Easing, Image, ImageSourcePropType, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 import { useFocusMode } from '../context/FocusContext';
 import { useSwipeX } from './SwipeNav';
 
@@ -23,6 +24,8 @@ const BLOB_PATH =
   'M50 2 C72 0 96 12 98 38 C100 64 78 78 50 78 C22 78 0 66 2 40 C4 14 28 4 50 2 Z';
 
 export default function BlobTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { focused } = useFocusMode();
   const swipeX = useSwipeX();
@@ -110,7 +113,7 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
     </Animated.View>
   );
 }
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   wrap: { backgroundColor: colors.paleGreen },
   bar: { height: BAR_HEIGHT, flexDirection: 'row', alignItems: 'center' },
   tab: { flex: 1, height: BAR_HEIGHT, alignItems: 'center', justifyContent: 'center' },

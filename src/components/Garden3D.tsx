@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import Svg, { ClipPath, Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
 import AnimatedPlant from '../plants/AnimatedPlant';
 import { MAPLE, type PlantId } from '../plants/catalog';
+import { useTheme } from '../theme/ThemeContext';
 import { RedTreeScene } from './RedTree';
 
 const N = 5; // 5x5 island
@@ -11,6 +12,18 @@ const N = 5; // 5x5 island
 const rnd = (seed: number) => {
   const x = Math.sin(seed * 127.1 + 31.7) * 43758.5453;
   return x - Math.floor(x);
+};
+
+const DAY = {
+  g0: '#6FD27F', g1: '#4DBF68', s1: '#D9C896', s2: '#EAD9B4', w1: '#B3A468', w2: '#C9B980', j1: '#3FB567', j2: '#58C77A',
+  fringe: '#5BCB6E', hi: '#9BE8A8', lo: '#35A455', tuft: '#3A9D55', petal1: '#FFFFFF', petal2: '#FFF8E1', mid1: '#F4B942', mid2: '#E08A1E',
+  f1: '#FFF9C4', f2: '#F9C74F', f3: '#FFFFFF', f4: '#FFE082', hiOp: 0.28, loOp: 0.16,
+};
+/** the island by moonlight: grass and cliff gone blue-silver */
+const NIGHT = {
+  g0: '#5F93C2', g1: '#3C679E', s1: '#5B6286', s2: '#6C739A', w1: '#474C75', w2: '#555B86', j1: '#336D9E', j2: '#437FB2',
+  fringe: '#4A83B8', hi: '#A5CBEA', lo: '#26497A', tuft: '#2C5A8C', petal1: '#DDE9FF', petal2: '#C9DAF5', mid1: '#E8DDA6', mid2: '#CDBF7C',
+  f1: '#E6EEFF', f2: '#EAD98F', f3: '#DDE9FF', f4: '#D5E2F8', hiOp: 0.34, loOp: 0.22,
 };
 
 type Pt = { x: number; y: number };
@@ -27,6 +40,8 @@ type Props = {
 
 /** Isometric grass island. Every tile is a slot you can plant one of your flowers in. */
 function Garden3D({ placed, width, armed, onSlot }: Props) {
+  const { dark } = useTheme();
+  const P = dark ? NIGHT : DAY;
   const a = Math.floor(width / (2 * N)); // half tile width
   const h = a / 2;
   const cx = width / 2;
@@ -65,10 +80,10 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
         <G key={`${seed}${n}`}>
           {[0, 72, 144, 216, 288].map((deg) => (
             <G key={deg} rotation={deg} originX={q.x} originY={y}>
-              <Ellipse cx={q.x} cy={y - r} rx={r * 0.62} ry={r} fill={big ? petal : '#F4B942'} />
+              <Ellipse cx={q.x} cy={y - r} rx={r * 0.62} ry={r} fill={big ? petal : P.mid1} />
             </G>
           ))}
-          <Circle cx={q.x} cy={y} r={r * 0.5} fill={big ? '#F4B942' : '#E08A1E'} />
+          <Circle cx={q.x} cy={y} r={r * 0.5} fill={big ? P.mid1 : P.mid2} />
         </G>
       );
     });
@@ -126,8 +141,8 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
       <Svg width={width + 40} height={height} viewBox={viewBox}>
         <Defs>
           <LinearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#6FD27F" />
-            <Stop offset="1" stopColor="#4DBF68" />
+            <Stop offset="0" stopColor={P.g0} />
+            <Stop offset="1" stopColor={P.g1} />
           </LinearGradient>
           <ClipPath id="topface">
             <Polygon points={diamond} />
@@ -135,22 +150,22 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
         </Defs>
 
         {/* sides: sand, then an olive layer with a wavy edge, then a green fringe with a ragged edge */}
-        <Polygon points={face(W, S, () => depth)} fill="#D9C896" />
-        <Polygon points={face(S, E, () => depth)} fill="#EAD9B4" />
-        <Polygon points={face(W, S, wave(0.66, 1))} fill="#B3A468" />
-        <Polygon points={face(S, E, wave(0.66, 4))} fill="#C9B980" />
-        <Polygon points={face(W, S, jag(0.3, 11))} fill="#3FB567" />
-        <Polygon points={face(S, E, jag(0.3, 71))} fill="#58C77A" />
-        {sideFlowers(W, S, 5, '#FFFFFF')}
-        {sideFlowers(S, E, 25, '#FFF8E1')}
+        <Polygon points={face(W, S, () => depth)} fill={P.s1} />
+        <Polygon points={face(S, E, () => depth)} fill={P.s2} />
+        <Polygon points={face(W, S, wave(0.66, 1))} fill={P.w1} />
+        <Polygon points={face(S, E, wave(0.66, 4))} fill={P.w2} />
+        <Polygon points={face(W, S, jag(0.3, 11))} fill={P.j1} />
+        <Polygon points={face(S, E, jag(0.3, 71))} fill={P.j2} />
+        {sideFlowers(W, S, 5, P.petal1)}
+        {sideFlowers(S, E, 25, P.petal2)}
 
-        <Polygon points={fringe(Nn, W, 3)} fill="#5BCB6E" />
-        <Polygon points={fringe(Nn, E, 33)} fill="#5BCB6E" />
+        <Polygon points={fringe(Nn, W, 3)} fill={P.fringe} />
+        <Polygon points={fringe(Nn, E, 33)} fill={P.fringe} />
         <Polygon points={diamond} fill="url(#grass)" />
 
         <G clipPath="url(#topface)">
           {patches.map((p, n) => (
-            <Ellipse key={n} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={p.light ? '#9BE8A8' : '#35A455'} opacity={p.light ? 0.28 : 0.16} />
+            <Ellipse key={n} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={p.light ? P.hi : P.lo} opacity={p.light ? P.hiOp : P.loOp} />
           ))}
         </G>
 
@@ -160,7 +175,7 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
               <Path
                 key={n}
                 d={`M${t.x - 5} ${t.y} L${t.x - 3} ${t.y - 7} L${t.x - 1.5} ${t.y} L${t.x} ${t.y - 9} L${t.x + 1.5} ${t.y} L${t.x + 3.5} ${t.y - 6} L${t.x + 5} ${t.y}`}
-                stroke="#3A9D55"
+                stroke={P.tuft}
                 strokeWidth={1.3}
                 fill="none"
                 strokeLinecap="round"
@@ -170,12 +185,12 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
             {d.flowers && (
               <G>
                 {[[0, -2.4], [2.4, 0], [0, 2.4], [-2.4, 0]].map(([dx, dy], n) => (
-                  <Circle key={n} cx={d.flowers!.x + dx} cy={d.flowers!.y + dy} r={1.7} fill="#FFF9C4" />
+                  <Circle key={n} cx={d.flowers!.x + dx} cy={d.flowers!.y + dy} r={1.7} fill={P.f1} />
                 ))}
-                <Circle cx={d.flowers.x} cy={d.flowers.y} r={1.5} fill="#F9C74F" />
-                <Circle cx={d.flowers.x + 8} cy={d.flowers.y + 2} r={1.1} fill="#FFFFFF" />
-                <Circle cx={d.flowers.x + 11} cy={d.flowers.y - 1} r={1} fill="#FFE082" />
-                <Circle cx={d.flowers.x - 8} cy={d.flowers.y + 1.5} r={1} fill="#FFFFFF" />
+                <Circle cx={d.flowers.x} cy={d.flowers.y} r={1.5} fill={P.f2} />
+                <Circle cx={d.flowers.x + 8} cy={d.flowers.y + 2} r={1.1} fill={P.f3} />
+                <Circle cx={d.flowers.x + 11} cy={d.flowers.y - 1} r={1} fill={P.f4} />
+                <Circle cx={d.flowers.x - 8} cy={d.flowers.y + 1.5} r={1} fill={P.f3} />
               </G>
             )}
           </G>

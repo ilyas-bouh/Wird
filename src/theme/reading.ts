@@ -9,6 +9,9 @@ export const TEXT_STYLE = {
   marker: '#2E7D32',
 };
 
+/** the same page at night: cream glyphs on the dark paper */
+export const TEXT_STYLE_DARK = { ...TEXT_STYLE, color: '#F3E9D2', marker: '#7FD6A2' };
+
 export function textStyleCss(t = TEXT_STYLE) {
   return `
   #content path { fill: ${t.color}; stroke: ${t.color}; stroke-width: ${t.bold}; stroke-linejoin: round; }

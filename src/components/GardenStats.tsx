@@ -1,7 +1,8 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 
 export type StatsData = {
   blooming: number;
@@ -47,6 +48,8 @@ function Icon({ name, color, size = 18 }: { name: IconName; color: string; size?
 
 /** circular progress with the percentage in the middle */
 function Ring({ pct, size = 92 }: { pct: number; size?: number }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const r = size / 2 - 8;
   const c = 2 * Math.PI * r;
   return (
@@ -58,7 +61,7 @@ function Ring({ pct, size = 92 }: { pct: number; size?: number }) {
             <Stop offset="1" stopColor="#2E9E5B" />
           </LinearGradient>
         </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke="#FFFFFF" strokeOpacity={0.55} strokeWidth={9} fill="none" />
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.dark ? '#FFFFFF' : '#FFFFFF'} strokeOpacity={colors.dark ? 0.1 : 0.55} strokeWidth={9} fill="none" />
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -91,6 +94,8 @@ const TILES: { key: keyof StatsData | 'hizbs' | 'garden'; label: string; icon: I
 ];
 
 function GardenStats({ d }: { d: StatsData }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const pct = d.blooming / d.totalThumns;
   const value = (k: (typeof TILES)[number]['key']) =>
     k === 'hizbs' ? `${d.hizbsDone}/${d.hizbTotal}` : k === 'garden' ? `${d.planted}/${d.slots}` : String(d[k as keyof StatsData]);
@@ -113,7 +118,7 @@ function GardenStats({ d }: { d: StatsData }) {
       <View style={styles.grid}>
         {TILES.map((t) => (
           <View key={t.label} style={styles.tile}>
-            <View style={[styles.iconBubble, { backgroundColor: t.bg }]}>
+            <View style={[styles.iconBubble, { backgroundColor: colors.dark ? `${t.tint}33` : t.bg }]}>
               <Icon name={t.icon} color={t.tint} />
             </View>
             <Text style={styles.tileValue}>{value(t.key)}</Text>
@@ -128,7 +133,7 @@ function GardenStats({ d }: { d: StatsData }) {
 }
 export default memo(GardenStats);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   wrap: { marginHorizontal: 16, marginVertical: 12 },
   hero: {
     flexDirection: 'row',
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 22,
     backgroundColor: colors.paleGreen,
-    shadowColor: '#1B5E20',
+    shadowColor: colors.dark ? '#000' : '#1B5E20',
     shadowOpacity: 0.12,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -155,10 +160,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#FFF3E0',
+    backgroundColor: colors.dark ? '#3A2A18' : '#FFF3E0',
   },
-  streakValue: { fontSize: 18, fontWeight: '800', color: '#E65100' },
-  streakLabel: { fontSize: 12, color: '#A1560F', fontWeight: '600' },
+  streakValue: { fontSize: 18, fontWeight: '800', color: colors.dark ? '#FFB74D' : '#E65100' },
+  streakLabel: { fontSize: 12, color: colors.dark ? '#E0A860' : '#A1560F', fontWeight: '600' },
   ringText: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ringValue: { fontSize: 22, fontWeight: '800', color: colors.darkGreen },
   ringLabel: { fontSize: 10, color: colors.textMuted, marginTop: -1 },
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
     flexBasis: '30%',
     padding: 12,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.paleGreen,
     shadowColor: '#1B5E20',

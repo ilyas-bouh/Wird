@@ -1,10 +1,11 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import PlantArt from '../plants/PlantArt';
 import { FULL_GROWTH, HIZB_COUNT, MAPLE, THUMNS_PER_HIZB, plantId, plantName, type PlantId } from '../plants/catalog';
 import RedTreeArt from './RedTree';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Palette } from '../theme/colors';
 
 type Props = {
   /** finished thumns (0..8) per hizb */
@@ -42,6 +43,8 @@ const Card = memo(function Card({
   picked: boolean;
   onPick: (id: PlantId, unlocked: boolean) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Pressable onPress={() => onPick(id, unlocked)} style={[styles.card, picked && styles.cardOn, !unlocked && styles.cardLocked]}>
       <View style={!unlocked && styles.dim}>
@@ -69,6 +72,8 @@ const Card = memo(function Card({
 
 /** Horizontal list of every plant. The maple comes first; flowers unlock one hizb at a time. */
 export default function PlantShelf({ growth, treeUnlocked, placedIds, picked, onPick }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <FlatList
       horizontal
@@ -87,11 +92,11 @@ export default function PlantShelf({ growth, treeUnlocked, placedIds, picked, on
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Palette) => StyleSheet.create({
   list: { paddingHorizontal: 16, gap: 8 },
-  card: { width: 78, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: '#fff', borderWidth: 2, borderColor: colors.paleGreen },
+  card: { width: 78, alignItems: 'center', paddingVertical: 8, borderRadius: 16, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.paleGreen },
   cardOn: { borderColor: colors.accent, backgroundColor: colors.paleGreen },
-  cardLocked: { backgroundColor: '#F4F7F2' },
+  cardLocked: { backgroundColor: colors.dark ? '#131C28' : '#F4F7F2' },
   dim: { opacity: 0.8, filter: 'grayscale(0.8)' },
   name: { fontSize: 11, color: colors.textMuted, marginTop: 2, maxWidth: 70 },
   progress: { fontSize: 11, fontWeight: '700', color: colors.darkGreen },
