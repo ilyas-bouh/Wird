@@ -31,5 +31,5 @@ export async function loadChoice(): Promise<ResourceChoice> {
 
 export const saveChoice = (c: ResourceChoice) => AsyncStorage.setItem(KEY, JSON.stringify(c)).catch(() => {});
 
-/** Where the resource packs are hosted. Empty until the files are published: downloads are then skipped. */
-export const RESOURCE_BASE_URL = '';
+/** Where the resource packs are hosted. GitHub release holding the zip bundles and manifest.json. */
+export const RESOURCE_BASE_URL = 'https://github.com/ilyas-bouh/Wird/releases/download/resources';

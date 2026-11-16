@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { AYAH_AUDIO } from '../data/audioAssets';
+import { hasLocalAudio, localAudioUri } from './localResources';
 
 export type AyahRef = { surah: number; ayah: number };
 export type PlayerState = 'idle' | 'playing' | 'paused';
 
 export const ayahKey = (a: AyahRef) => `${a.surah}:${a.ayah}`;
-export const hasAudio = (a: AyahRef) => ayahKey(a) in AYAH_AUDIO;
+export const hasAudio = (a: AyahRef) => hasLocalAudio() || ayahKey(a) in AYAH_AUDIO;
 
 /**
  * Plays the given ayahs one after another from the local MP3s and reports the current ayah.
@@ -61,7 +62,7 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
     if (i >= l.length) return stop();
     idx.current = i;
     const p = ensure();
-    p.replace(AYAH_AUDIO[ayahKey(l[i])]);
+    p.replace(localAudioUri(l[i].surah, l[i].ayah) ?? AYAH_AUDIO[ayahKey(l[i])]);
     p.play();
     set('playing');
     cb.current(l[i]);

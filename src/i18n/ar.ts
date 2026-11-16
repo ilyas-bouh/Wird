@@ -125,6 +125,11 @@ export const ar: Record<keyof typeof en, string> = {
   'setup.total': 'الإجمالي: نحو {mb} ميغابايت',
   'setup.download': 'تنزيل وابدأ',
   'setup.skip': 'تخطَّ الآن',
+  'setup.downloadingTitle': 'جارٍ تنزيل مصحفك',
+  'setup.keepOpen': 'أبقِ التطبيق مفتوحًا. ستنتقل إلى القارئ عند الانتهاء.',
+  'setup.downloading': 'جارٍ التنزيل {mb} من {total} م.ب…',
+  'setup.failed': 'فشل التنزيل. تحقق من الاتصال وحاول مرة أخرى. الأجزاء المكتملة محفوظة.',
+  'setup.retry': 'حاول مرة أخرى',
   'setup.notReady': 'التنزيل غير متاح بعد. اختياراتك محفوظة وسيبدأ التنزيل عند توفره.',
 };
 

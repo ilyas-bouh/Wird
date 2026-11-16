@@ -24,6 +24,7 @@ import { useOnboarding } from '../context/OnboardingContext';
 import { CoachCard } from '../components/CoachMark';
 import { swipeNavigate, swipeNavigateTo } from '../lib/swipeNav';
 import { svgFromBr } from '../lib/brotli';
+import { hasLocalPages, loadLocalPage, useResourcesVersion } from '../lib/localResources';
 import pageInk from '../data/pageInk.json';
 import { BUNDLED_PAGES, PAGE_JSONS, PAGE_SVGS } from '../data/pageAssets';
 
@@ -261,6 +262,7 @@ export default function ReaderScreen() {
     const arg = a ? JSON.stringify(ayahKey(a)) : 'null';
     webRef.current?.inject(`window.wirdSetCurrent(${arg}, true); true;`);
   };
+  const resVersion = useResourcesVersion();
   const player = useAyahPlayer(ayahs, follow, tour === 'ayah');
 
   // Entering the Reader starts in focus mode (no tab bar, no status bar).
@@ -284,14 +286,16 @@ export default function ReaderScreen() {
         const out: string[] = [];
         const list: AyahRef[] = [];
         for (let p = start.page; p <= end.page; p++) {
-          const svg = await loadSvg(PAGE_SVGS[p]);
-          const inRange = selectRange(PAGE_JSONS[p], start, end);
+          const local = await loadLocalPage(p);
+          const svg = local ? local.svg : await loadSvg(PAGE_SVGS[p]);
+          const json = local ? local.json : PAGE_JSONS[p];
+          const inRange = selectRange(json, start, end);
           for (const e of inRange) {
             const r = { surah: e.surahNumber, ayah: e.ayahNumber };
             if (!list.some((x) => ayahKey(x) === ayahKey(r))) list.push(r);
           }
-          const zones = headerZones(PAGE_JSONS[p], inRange, INK_TOP[String(p)]);
-          const others = PAGE_JSONS[p].filter((e) => !inRange.includes(e)).map((e) => e.polygon);
+          const zones = headerZones(json, inRange, INK_TOP[String(p)]);
+          const others = json.filter((e) => !inRange.includes(e)).map((e) => e.polygon);
           out.push(cropSvg(svg, inRange.map((e) => e.polygon), { width: STRIP_WIDTH, zones, cover: others, paper: colors.paper }));
         }
         const first = Math.floor(index / step) * step; // the portion's thumns: one in thomon mode, two in rub' mode
@@ -299,7 +303,7 @@ export default function ReaderScreen() {
         const nextIndex = first + step;
         const next = nextIndex < 480 ? portionAt(mode, nextIndex) : null;
         const noun = t(mode === 'rub' ? 'reader.noun.rub' : 'reader.noun.thumn');
-        const hasNext = !!next && next.end.page <= BUNDLED_PAGES;
+        const hasNext = !!next && (hasLocalPages() || next.end.page <= BUNDLED_PAGES);
         const label = !next
           ? t('reader.end')
           : hasNext
@@ -325,7 +329,7 @@ export default function ReaderScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, mode, colors, lang, tour]);
+  }, [index, mode, colors, lang, tour, resVersion]);
 
   const onMessage = (msg: string) => {
     if (tour) {

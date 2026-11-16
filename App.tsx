@@ -16,6 +16,7 @@ import { OnboardingProvider, useOnboarding } from './src/context/OnboardingConte
 import MapleGift from './src/components/MapleGift';
 import { useGarden } from './src/context/GardenContext';
 import { swipeNavigateTo } from './src/lib/swipeNav';
+import { refreshInstalled } from './src/lib/localResources';
 import SetupScreen from './src/screens/SetupScreen';
 import { PortionProvider } from './src/context/PortionContext';
 import { FONT_FILES } from './src/theme/fonts';
@@ -71,6 +72,7 @@ function Shell() {
 /** The tabs, plus the first-run setup screen. Waits until the tour progress is known so the right tab opens first. */
 function Main() {
   const onb = useOnboarding();
+  useEffect(() => { refreshInstalled(); }, []);
   const { unlockTree } = useGarden();
   // once the maple overlay has faded in, switch to the Garden underneath it (the Garden's first mount happens unseen)
   useEffect(() => {

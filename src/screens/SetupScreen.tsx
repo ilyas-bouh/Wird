@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Text from '../components/AppText';
 import { useI18n } from '../i18n/I18nContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
+import { swipeNavigateTo } from '../lib/swipeNav';
+import { downloadResources } from '../lib/localResources';
 import { DEFAULT_CHOICE, RESOURCE_BASE_URL, estimateMb, loadChoice, saveChoice, sizeOf, type ResourceChoice, type Riwaya } from '../lib/resources';
 
 /** The last onboarding step: choose the riwaya and which resources to keep on the device. */
@@ -22,9 +24,23 @@ export default function SetupScreen({ visible, onDone }: { visible: boolean; onD
   }, [visible]);
 
   const patch = (p: Partial<ResourceChoice>) => setChoice((c) => ({ ...c, ...p }));
-  const finish = (save: boolean) => {
-    if (save) saveChoice(choice);
-    onDone();
+  const [prog, setProg] = useState<{ done: number; total: number } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const finish = async (save: boolean) => {
+    if (!save) return onDone();
+    await saveChoice(choice);
+    if (Platform.OS === 'web' || !RESOURCE_BASE_URL) return onDone();
+    setFailed(false);
+    setProg({ done: 0, total: 1 });
+    try {
+      await downloadResources(choice, (p) => setProg({ done: p.done, total: Math.max(p.total, 1) }));
+      setProg(null);
+      swipeNavigateTo('Reader');
+      onDone();
+    } catch {
+      setProg(null);
+      setFailed(true);
+    }
   };
   const mb = estimateMb(choice);
   // pages and tafsir are always needed, so they are locked on
@@ -43,6 +59,17 @@ export default function SetupScreen({ visible, onDone }: { visible: boolean; onD
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={() => {}}>
       <View style={[styles.screen, { paddingTop: insets.top + 24 }]}>
+        {prog ? (
+          <View style={styles.progressScreen}>
+            <Text style={styles.title}>{t('setup.downloadingTitle')}</Text>
+            <View style={styles.bar}>
+              <View style={{ height: 10, width: `${Math.round((prog.done / prog.total) * 100)}%`, backgroundColor: colors.accent }} />
+            </View>
+            <Text style={styles.pct}>{Math.round((prog.done / prog.total) * 100)}%</Text>
+            <Text style={styles.note}>{t('setup.downloading', { mb: Math.round(prog.done / 1048576), total: Math.round(prog.total / 1048576) })}</Text>
+            <Text style={styles.note}>{t('setup.keepOpen')}</Text>
+          </View>
+        ) : (
         <ScrollView contentContainerStyle={styles.body}>
           <Text style={[styles.title, { textAlign: align }]}>{t('setup.title')}</Text>
           <Text style={[styles.sub, { textAlign: align }]}>{t('setup.sub')}</Text>
@@ -78,16 +105,18 @@ export default function SetupScreen({ visible, onDone }: { visible: boolean; onD
 
           <Text style={styles.total}>{t('setup.total', { mb })}</Text>
           {!RESOURCE_BASE_URL && <Text style={styles.note}>{t('setup.notReady')}</Text>}
+          {failed && <Text style={[styles.note, { color: colors.accent }]}>{t('setup.failed')}</Text>}
         </ScrollView>
+        )}
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable onPress={() => finish(true)} style={styles.btn}>
-            <Text style={styles.btnText}>{t('setup.download')}</Text>
+        {!prog && <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <Pressable onPress={() => finish(true)} disabled={!!prog} style={[styles.btn, !!prog && { opacity: 0.5 }]}>
+            <Text style={styles.btnText}>{failed ? t('setup.retry') : t('setup.download')}</Text>
           </Pressable>
-          <Pressable onPress={() => finish(false)} hitSlop={8} style={styles.skip}>
+          <Pressable onPress={() => finish(false)} disabled={!!prog} hitSlop={8} style={styles.skip}>
             <Text style={styles.skipText}>{t('setup.skip')}</Text>
           </Pressable>
-        </View>
+        </View>}
       </View>
     </Modal>
   );
@@ -108,6 +137,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
   radioOn: { borderColor: colors.accent },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent },
+  progressScreen: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 14 },
+  bar: { height: 10, borderRadius: 5, backgroundColor: colors.mint, overflow: 'hidden' },
+  pct: { textAlign: 'center', fontSize: 36, fontWeight: '700', color: colors.darkGreen },
   total: { marginTop: 18, textAlign: 'center', fontSize: 14, fontWeight: '600', color: colors.darkGreen },
   note: { marginTop: 8, textAlign: 'center', fontSize: 12, lineHeight: 18, color: colors.textMuted, marginHorizontal: 12 },
   footer: { paddingHorizontal: 18, paddingTop: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.paleGreen, backgroundColor: colors.paper },

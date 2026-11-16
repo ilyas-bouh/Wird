@@ -131,5 +131,10 @@ export const en = {
   'setup.total': 'Total: about {mb} MB',
   'setup.download': 'Download and start',
   'setup.skip': 'Skip for now',
+  'setup.downloadingTitle': 'Downloading your Quran',
+  'setup.keepOpen': 'Keep the app open. You will go to the Reader when it is ready.',
+  'setup.downloading': 'Downloading {mb} of {total} MB…',
+  'setup.failed': 'Download failed. Check your connection and try again. Finished parts are kept.',
+  'setup.retry': 'Try again',
   'setup.notReady': 'Downloads are not available yet. Your choices are saved and will download once available.',
 };
