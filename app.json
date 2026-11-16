@@ -29,7 +29,20 @@
       "expo-asset",
       "expo-sqlite",
       "expo-font",
-      "expo-navigation-bar"
+      "expo-navigation-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "backgroundColor": "#082316",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "dark": {
+            "image": "./assets/icon.png",
+            "backgroundColor": "#082316"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
