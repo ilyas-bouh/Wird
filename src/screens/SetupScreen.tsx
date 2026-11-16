@@ -60,9 +60,9 @@ export default function SetupScreen({ visible, onDone }: { visible: boolean; onD
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={() => {}}>
       <View style={[styles.screen, { paddingTop: insets.top + 24 }]}>
         {prog ? (
-          <View style={styles.progressScreen}>
-            <Text style={styles.title}>{t('setup.downloadingTitle')}</Text>
-            <View style={styles.bar}>
+          <View style={[styles.progressScreen, { direction: rtl ? 'rtl' : 'ltr' }]}>
+            <Text style={[styles.title, { textAlign: 'center', writingDirection: rtl ? 'rtl' : 'ltr' }]}>{t('setup.downloadingTitle')}</Text>
+            <View style={[styles.bar, { flexDirection: rtl ? 'row-reverse' : 'row' }]}>
               <View style={{ height: 10, width: `${Math.round((prog.done / prog.total) * 100)}%`, backgroundColor: colors.accent }} />
             </View>
             <Text style={styles.pct}>{Math.round((prog.done / prog.total) * 100)}%</Text>
