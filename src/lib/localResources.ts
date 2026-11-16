@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { unzipSync } from 'fflate';
 import { loadChoice, RESOURCE_BASE_URL, type ResourceChoice, type Riwaya } from './resources';
 import { svgFromBr } from './brotli';
+import { hafsKeysFor } from './tafsir';
 import type { PagePolygon } from './cropSvg';
 
 /**
@@ -15,7 +16,8 @@ export type Progress = { done: number; total: number; label: string };
 
 const root = () => new Directory(Paths.document, 'resources');
 const dir = (r: Riwaya, ...p: string[]) => new Directory(root(), r, ...p);
-const marker = (r: Riwaya, kind: 'pages' | 'audio') => new File(root(), r, `${kind}.done`);
+// audio.done (v1) marked audio unpacked into the wrong folder, so audio uses a new marker name to force a re-download
+const marker = (r: Riwaya, kind: 'pages' | 'audio') => new File(root(), r, kind === 'audio' ? 'audio-v2.done' : 'pages.done');
 
 type Installed = { riwaya: Riwaya; pages: boolean; audio: boolean };
 let installed: Installed | null = null;
@@ -42,9 +44,16 @@ export const hasLocalAudio = () => !!installed?.audio;
 
 const pad = (n: number, w = 3) => String(n).padStart(w, '0');
 
-/** Local mp3 for an ayah, or null when the audio pack is not installed. */
-export const localAudioUri = (surah: number, ayah: number) =>
-  installed?.audio ? new File(dir(installed.riwaya, 'audio'), `${pad(surah)}${pad(ayah)}.mp3`).uri : null;
+/**
+ * Local mp3 files to play for one ayah as the Reader numbers it. Audio files are cut at Hafs ayah boundaries
+ * (6236 per reciter) even for Warsh, so a Warsh ayah is converted to the Hafs ayah(s) it covers
+ * (e.g. Warsh 2:1 = Hafs 2:1 + 2:2, Warsh 2:56 = Hafs 2:57). Hafs needs no conversion.
+ */
+export function localAudioUris(surah: number, ayah: number): string[] {
+  if (!installed?.audio) return [];
+  const files = installed.riwaya === 'warsh' ? hafsKeysFor(`${surah}:${ayah}`).map((k) => k.split(':').map(Number)) : [[surah, ayah]];
+  return files.map(([s, a]) => new File(dir(installed!.riwaya, 'audio'), `${pad(s)}${pad(a)}.mp3`).uri);
+}
 
 /** A downloaded mushaf page (SVG text inflated from .svg.br, plus its ayah polygons), or null. */
 export async function loadLocalPage(page: number): Promise<{ svg: string; json: PagePolygon[] } | null> {
@@ -69,6 +78,7 @@ async function fetchZip(name: string, bytes: number, onBytes: (n: number) => voi
   });
   await task.downloadAsync();
   if (tmp.size !== bytes) throw new Error(`${name}: size ${tmp.size} != ${bytes}`);
+  if (!target.exists) target.create({ intermediates: true });
   const entries = unzipSync(new Uint8Array(await tmp.arrayBuffer()));
   for (const [path, data] of Object.entries(entries)) {
     const parts = path.split('/');
@@ -101,7 +111,9 @@ export async function downloadResources(choice: ResourceChoice, onProgress: (p: 
     const parts = todo.filter((f) => f.kind === kind);
     for (const f of parts) {
       let last = 0;
-      await fetchZip(f.name, f.bytes, (n) => { done += n - last; last = n; onProgress({ done, total, label: f.name }); }, target);
+      // page zips carry their own svg-br/ and json/ folders; audio zips are flat mp3s that belong in audio/
+      const dest = kind === 'audio' ? dir(choice.riwaya, 'audio') : target;
+      await fetchZip(f.name, f.bytes, (n) => { done += n - last; last = n; onProgress({ done, total, label: f.name }); }, dest);
       done += f.bytes - last;
       onProgress({ done, total, label: f.name });
     }

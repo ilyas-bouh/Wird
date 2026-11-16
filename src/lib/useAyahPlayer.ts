@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
-import { AYAH_AUDIO } from '../data/audioAssets';
-import { hasLocalAudio, localAudioUri } from './localResources';
+import { hasLocalAudio, localAudioUris } from './localResources';
 
 export type AyahRef = { surah: number; ayah: number };
 export type PlayerState = 'idle' | 'playing' | 'paused';
 
 export const ayahKey = (a: AyahRef) => `${a.surah}:${a.ayah}`;
-export const hasAudio = (a: AyahRef) => hasLocalAudio() || ayahKey(a) in AYAH_AUDIO;
+export const hasAudio = (a: AyahRef) => hasLocalAudio();
 
 /**
  * Plays the given ayahs one after another from the local MP3s and reports the current ayah.
@@ -18,6 +17,8 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
   const stateRef = useRef<PlayerState>('idle');
   const player = useRef<AudioPlayer | null>(null);
   const idx = useRef(-1);
+  const sub = useRef(0); // which file of the current ayah (a Warsh ayah can span two Hafs-cut files)
+  const files = useRef<string[]>([]);
   const list = useRef(ayahs);
   list.current = ayahs;
   const singleRef = useRef(single); // play just the chosen ayah, then stop
@@ -38,7 +39,11 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
       const p = createAudioPlayer();
       p.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish && stateRef.current === 'playing') {
-          if (singleRef.current) stopRef.current();
+          if (sub.current + 1 < files.current.length) {
+            sub.current += 1;
+            player.current?.replace(files.current[sub.current]);
+            player.current?.play();
+          } else if (singleRef.current) stopRef.current();
           else playAtRef.current(idx.current + 1);
         }
       });
@@ -58,11 +63,13 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
   playAtRef.current = (from: number) => {
     const l = list.current;
     let i = from;
-    while (i < l.length && !hasAudio(l[i])) i++;
+    while (i < l.length && !localAudioUris(l[i].surah, l[i].ayah).length) i++;
     if (i >= l.length) return stop();
     idx.current = i;
+    files.current = localAudioUris(l[i].surah, l[i].ayah);
+    sub.current = 0;
     const p = ensure();
-    p.replace(localAudioUri(l[i].surah, l[i].ayah) ?? AYAH_AUDIO[ayahKey(l[i])]);
+    p.replace(files.current[0]);
     p.play();
     set('playing');
     cb.current(l[i]);

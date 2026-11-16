@@ -40,7 +40,7 @@ export const en = {
   'reader.prev': 'Previous {noun} ({n})',
   'reader.locked': "Finish today's portion to move on.",
   'reader.end': 'End of the Quran',
-  'reader.notBundled': '{noun} {n}: pages not bundled yet',
+  'reader.needsDownload': 'These pages are not on this device yet. Download them from Settings.',
   'reader.stop': 'Stop',
   'reader.pause': 'Pause',
   'reader.play': 'Play',

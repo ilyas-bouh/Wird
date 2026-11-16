@@ -24,9 +24,9 @@ import { useOnboarding } from '../context/OnboardingContext';
 import { CoachCard } from '../components/CoachMark';
 import { swipeNavigate, swipeNavigateTo } from '../lib/swipeNav';
 import { svgFromBr } from '../lib/brotli';
-import { hasLocalPages, loadLocalPage, useResourcesVersion } from '../lib/localResources';
+import { loadLocalPage, useResourcesVersion } from '../lib/localResources';
 import pageInk from '../data/pageInk.json';
-import { BUNDLED_PAGES, PAGE_JSONS, PAGE_SVGS } from '../data/pageAssets';
+import { TOUR_PAGE } from '../data/pageAssets';
 
 // Every page is cropped to the same width so the stacked pages share one scale.
 const STRIP_WIDTH = 331;
@@ -243,6 +243,7 @@ export default function ReaderScreen() {
   const { thumnIndex: index, setThumnIndex: setIndex, mode } = usePortion(); // portion setting, shared with the Tafsir tab
   const step = mode === 'rub' ? 2 : 1; // thumn steps per portion
   const [html, setHtml] = useState<string | null>(null);
+  const [htmlKey, setHtmlKey] = useState(''); // remounts the page only when a NEW portion's html is ready, never on the way (no blink)
   const [error, setError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
@@ -281,14 +282,13 @@ export default function ReaderScreen() {
         player.stop();
         selected.current = null;
         setTafsirKey(null);
-        setHtml(null);
         const { start, end } = tour ? FATIHA : portionAt(mode, index);
         const out: string[] = [];
         const list: AyahRef[] = [];
         for (let p = start.page; p <= end.page; p++) {
-          const local = await loadLocalPage(p);
-          const svg = local ? local.svg : await loadSvg(PAGE_SVGS[p]);
-          const json = local ? local.json : PAGE_JSONS[p];
+          const page = (await loadLocalPage(p)) ?? (p === 1 ? { svg: await loadSvg(TOUR_PAGE.svg), json: TOUR_PAGE.json } : null);
+          if (!page) throw new Error(t('reader.needsDownload'));
+          const { svg, json } = page;
           const inRange = selectRange(json, start, end);
           for (const e of inRange) {
             const r = { surah: e.surahNumber, ayah: e.ayahNumber };
@@ -303,12 +303,8 @@ export default function ReaderScreen() {
         const nextIndex = first + step;
         const next = nextIndex < 480 ? portionAt(mode, nextIndex) : null;
         const noun = t(mode === 'rub' ? 'reader.noun.rub' : 'reader.noun.thumn');
-        const hasNext = !!next && (hasLocalPages() || next.end.page <= BUNDLED_PAGES);
-        const label = !next
-          ? t('reader.end')
-          : hasNext
-            ? t('reader.next', { noun, n: next.n })
-            : t('reader.notBundled', { noun, n: next.n });
+        const hasNext = !!next;
+        const label = next ? t('reader.next', { noun, n: next.n }) : t('reader.end');
         const first0 = first; // previous portion starts one step back
         const prevIndex = first0 - step;
         const prev = prevIndex >= 0 ? portionAt(mode, prevIndex) : null;
@@ -318,6 +314,7 @@ export default function ReaderScreen() {
           const text: SealText = tour
             ? { title: t('onb.read.seal.t'), sub: t('onb.read.seal.s'), doneTitle: t('seal.doneTitle'), doneSub: t('seal.doneSub') }
             : sealText(t, mode, portionAt(mode, index).n);
+          setHtmlKey(`${mode}-${index}-${tour ?? ''}`);
           setHtml(buildHtml(out, { label, enabled: hasNext, prevLabel, hasPrev: !!prev, lockedHint: t('reader.locked') }, colors, { text, done },
             tour ? { mode: tour, title: t('onb.read.title'), text: t('onb.read.text') } : null));
         }
@@ -393,7 +390,7 @@ export default function ReaderScreen() {
   }
   return (
     <View style={[styles.container, { paddingTop: topPad + (tour === 'ayah' ? cardH + 8 : 0) }]}>
-      <PageView ref={webRef} key={`${mode}-${index}-${tour ?? ''}`} html={html} onMessage={onMessage} style={styles.web} />
+      <PageView ref={webRef} key={htmlKey} html={html} onMessage={onMessage} style={styles.web} />
       {ayahs.some(hasAudio) && (
         <View
           style={[styles.player, { bottom: insets.bottom + 24 + (tafsirKey ? SHEET_HEIGHT : 0) }]}
