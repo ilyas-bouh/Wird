@@ -37,7 +37,7 @@ export const ar: Record<keyof typeof en, string> = {
   'reader.prev': '{noun} السابق ({n})',
   'reader.locked': 'أتمّ وردك لهذا اليوم لتنتقل.',
   'reader.end': 'انتهى القرآن',
-  'reader.needsDownload': 'هذه الصفحات غير موجودة على جهازك بعد. نزّلها من الإعدادات.',
+  'reader.needsDownload': 'هذه الصفحات غير موجودة على جهازك بعد.',
   'reader.stop': 'إيقاف',
   'reader.pause': 'إيقاف مؤقت',
   'reader.play': 'تشغيل',
