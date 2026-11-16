@@ -136,84 +136,99 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
   const viewBox = `-20 0 ${width + 40} ${height}`;
   const diamond = pts([Nn, E, S, W]);
 
+  // The island itself never changes while you plant (only width / theme do), so it is built once and reused:
+  // picking a flower or planting it no longer re-creates its hundreds of SVG nodes.
+  const island = useMemo(
+    () => (
+        <Svg width={width + 40} height={height} viewBox={viewBox}>
+          <Defs>
+            <LinearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor={P.g0} />
+              <Stop offset="1" stopColor={P.g1} />
+            </LinearGradient>
+            <ClipPath id="topface">
+              <Polygon points={diamond} />
+            </ClipPath>
+          </Defs>
+
+          {/* sides: sand, then an olive layer with a wavy edge, then a green fringe with a ragged edge */}
+          <Polygon points={face(W, S, () => depth)} fill={P.s1} />
+          <Polygon points={face(S, E, () => depth)} fill={P.s2} />
+          <Polygon points={face(W, S, wave(0.66, 1))} fill={P.w1} />
+          <Polygon points={face(S, E, wave(0.66, 4))} fill={P.w2} />
+          <Polygon points={face(W, S, jag(0.3, 11))} fill={P.j1} />
+          <Polygon points={face(S, E, jag(0.3, 71))} fill={P.j2} />
+          {sideFlowers(W, S, 5, P.petal1)}
+          {sideFlowers(S, E, 25, P.petal2)}
+
+          <Polygon points={fringe(Nn, W, 3)} fill={P.fringe} />
+          <Polygon points={fringe(Nn, E, 33)} fill={P.fringe} />
+          <Polygon points={diamond} fill="url(#grass)" />
+
+          <G clipPath="url(#topface)">
+            {patches.map((p, n) => (
+              <Ellipse key={n} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={p.light ? P.hi : P.lo} opacity={p.light ? P.hiOp : P.loOp} />
+            ))}
+          </G>
+
+          {tileDecor.map((d) => (
+            <G key={d.key}>
+              {d.tufts.map((t, n) => (
+                <Path
+                  key={n}
+                  d={`M${t.x - 5} ${t.y} L${t.x - 3} ${t.y - 7} L${t.x - 1.5} ${t.y} L${t.x} ${t.y - 9} L${t.x + 1.5} ${t.y} L${t.x + 3.5} ${t.y - 6} L${t.x + 5} ${t.y}`}
+                  stroke={P.tuft}
+                  strokeWidth={1.3}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))}
+              {d.flowers && (
+                <G>
+                  {[[0, -2.4], [2.4, 0], [0, 2.4], [-2.4, 0]].map(([dx, dy], n) => (
+                    <Circle key={n} cx={d.flowers!.x + dx} cy={d.flowers!.y + dy} r={1.7} fill={P.f1} />
+                  ))}
+                  <Circle cx={d.flowers.x} cy={d.flowers.y} r={1.5} fill={P.f2} />
+                  <Circle cx={d.flowers.x + 8} cy={d.flowers.y + 2} r={1.1} fill={P.f3} />
+                  <Circle cx={d.flowers.x + 11} cy={d.flowers.y - 1} r={1} fill={P.f4} />
+                  <Circle cx={d.flowers.x - 8} cy={d.flowers.y + 1.5} r={1} fill={P.f3} />
+                </G>
+              )}
+            </G>
+          ))}
+      </Svg>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [width, dark],
+  );
+
   return (
     <View style={{ width: width + 40, height }}>
-      <Svg width={width + 40} height={height} viewBox={viewBox}>
-        <Defs>
-          <LinearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={P.g0} />
-            <Stop offset="1" stopColor={P.g1} />
-          </LinearGradient>
-          <ClipPath id="topface">
-            <Polygon points={diamond} />
-          </ClipPath>
-        </Defs>
+      {island}
 
-        {/* sides: sand, then an olive layer with a wavy edge, then a green fringe with a ragged edge */}
-        <Polygon points={face(W, S, () => depth)} fill={P.s1} />
-        <Polygon points={face(S, E, () => depth)} fill={P.s2} />
-        <Polygon points={face(W, S, wave(0.66, 1))} fill={P.w1} />
-        <Polygon points={face(S, E, wave(0.66, 4))} fill={P.w2} />
-        <Polygon points={face(W, S, jag(0.3, 11))} fill={P.j1} />
-        <Polygon points={face(S, E, jag(0.3, 71))} fill={P.j2} />
-        {sideFlowers(W, S, 5, P.petal1)}
-        {sideFlowers(S, E, 25, P.petal2)}
-
-        <Polygon points={fringe(Nn, W, 3)} fill={P.fringe} />
-        <Polygon points={fringe(Nn, E, 33)} fill={P.fringe} />
-        <Polygon points={diamond} fill="url(#grass)" />
-
-        <G clipPath="url(#topface)">
-          {patches.map((p, n) => (
-            <Ellipse key={n} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={p.light ? P.hi : P.lo} opacity={p.light ? P.hiOp : P.loOp} />
-          ))}
-        </G>
-
-        {tileDecor.map((d) => (
-          <G key={d.key}>
-            {d.tufts.map((t, n) => (
-              <Path
-                key={n}
-                d={`M${t.x - 5} ${t.y} L${t.x - 3} ${t.y - 7} L${t.x - 1.5} ${t.y} L${t.x} ${t.y - 9} L${t.x + 1.5} ${t.y} L${t.x + 3.5} ${t.y - 6} L${t.x + 5} ${t.y}`}
-                stroke={P.tuft}
-                strokeWidth={1.3}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ))}
-            {d.flowers && (
-              <G>
-                {[[0, -2.4], [2.4, 0], [0, 2.4], [-2.4, 0]].map(([dx, dy], n) => (
-                  <Circle key={n} cx={d.flowers!.x + dx} cy={d.flowers!.y + dy} r={1.7} fill={P.f1} />
-                ))}
-                <Circle cx={d.flowers.x} cy={d.flowers.y} r={1.5} fill={P.f2} />
-                <Circle cx={d.flowers.x + 8} cy={d.flowers.y + 2} r={1.1} fill={P.f3} />
-                <Circle cx={d.flowers.x + 11} cy={d.flowers.y - 1} r={1} fill={P.f4} />
-                <Circle cx={d.flowers.x - 8} cy={d.flowers.y + 1.5} r={1} fill={P.f3} />
-              </G>
-            )}
-          </G>
-        ))}
-
-        {order.map(({ i, j, slot }) => {
-          const c = pt(i + 0.5, j + 0.5);
-          const id = placed[slot];
-          const tile = pts([{ x: c.x, y: c.y - h }, { x: c.x + a, y: c.y }, { x: c.x, y: c.y + h }, { x: c.x - a, y: c.y }]);
-          return (
-            <G key={slot} onPress={() => onSlot(slot)}>
+      {/* tap targets for empty tiles: only exists while a flower is picked */}
+      {armed && (
+        <Svg width={width + 40} height={height} viewBox={viewBox} style={{ position: 'absolute', left: 0, top: 0 }}>
+          {order.map(({ i, j, slot }) => {
+            if (placed[slot]) return null;
+            const c = pt(i + 0.5, j + 0.5);
+            const tile = pts([{ x: c.x, y: c.y - h }, { x: c.x + a, y: c.y }, { x: c.x, y: c.y + h }, { x: c.x - a, y: c.y }]);
+            return (
               <Polygon
+                key={slot}
                 points={tile}
-                fill={armed && !id ? '#FFFFFF' : 'transparent'}
-                fillOpacity={armed && !id ? 0.28 : 0}
-                stroke={armed && !id ? '#FFFFFF' : 'none'}
+                fill="#FFFFFF"
+                fillOpacity={0.28}
+                stroke="#FFFFFF"
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
+                onPress={() => onSlot(slot)}
               />
-            </G>
-          );
-        })}
-      </Svg>
+            );
+          })}
+        </Svg>
+      )}
 
       {/* Everything planted animates (the maple sways, flowers bend in the wind and shed petals), so each lives in its
           own native-driven view. They are drawn back to front so a plant stands in front of the ones behind it. */}
@@ -221,30 +236,25 @@ function Garden3D({ placed, width, armed, onSlot }: Props) {
         const id = placed[slot];
         if (!id) return null;
         const c = pt(i + 0.5, j + 0.5);
-        if (id === MAPLE) {
-          return (
-            <Pressable
-              key={slot}
-              onPress={() => onSlot(slot)}
-              style={{ position: 'absolute', left: c.x + 20 - 170 * s, top: c.y + h * 0.35 - 288 * s }}
-            >
-              <RedTreeScene width={340 * s} />
-            </Pressable>
-          );
-        }
-        const pw = 120 * k;
-        return (
-          <Pressable
-            key={slot}
-            onPress={() => onSlot(slot)}
-            style={{ position: 'absolute', left: c.x + 20 - 60 * k, top: c.y + h * 0.35 - 122 * k }}
-          >
-            <AnimatedPlant id={id} width={pw} />
-          </Pressable>
+        return id === MAPLE ? (
+          <Planted key={slot} slot={slot} id={id} left={c.x + 20 - 170 * s} top={c.y + h * 0.35 - 288 * s} width={340 * s} onSlot={onSlot} />
+        ) : (
+          <Planted key={slot} slot={slot} id={id} left={c.x + 20 - 60 * k} top={c.y + h * 0.35 - 122 * k} width={120 * k} onSlot={onSlot} />
         );
       })}
     </View>
   );
 }
+
+/** One planted plant. Memoised, so planting or picking up another one leaves it (and its wind animation) alone. */
+const Planted = memo(function Planted({
+  slot, id, left, top, width, onSlot,
+}: { slot: number; id: PlantId; left: number; top: number; width: number; onSlot: (slot: number) => void }) {
+  return (
+    <Pressable onPress={() => onSlot(slot)} style={{ position: 'absolute', left, top }}>
+      {id === MAPLE ? <RedTreeScene width={width} /> : <AnimatedPlant id={id} width={width} />}
+    </Pressable>
+  );
+});
 
 export default memo(Garden3D);

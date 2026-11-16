@@ -20,6 +20,8 @@ type Value = {
   stageOf: (thumnIndex: number) => number;
   /** advance one stage (wraps back to 0 after finishing so a mistake can be undone) */
   water: (thumnIndex: number) => void;
+  /** mark thumns finished (the Reader's completion seal); idempotent and counts today as a day of progress */
+  finish: (thumnIndices: number[]) => void;
   /** number of thumns at each stage, index = stage */
   counts: number[];
   streak: number;
@@ -44,6 +46,7 @@ const Ctx = createContext<Value>({
   unlockTree: () => {},
   stageOf: () => 0,
   water: () => {},
+  finish: () => {},
   counts: [THUMN_COUNT, 0, 0, 0, 0],
   streak: 0,
   bestStreak: 0,
@@ -123,6 +126,16 @@ export function GardenProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const finish = useCallback((indices: number[]) => {
+    setS((p) => {
+      const stages = { ...p.stages };
+      for (const i of indices) if (i >= 0 && i < THUMN_COUNT) stages[i] = MAX_STAGE;
+      const today = dayKey(new Date());
+      const days = p.days.includes(today) ? p.days : [...p.days.slice(-400), today];
+      return { ...p, stages, days };
+    });
+  }, []);
+
   const unlockTree = useCallback(() => {
     setS((p) => {
       if (p.treeUnlocked) return p;
@@ -133,7 +146,8 @@ export function GardenProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const value = useMemo<Value>(() => {
+  // planting only touches `placed`, so these keep their identity (and nothing downstream re-renders) when you plant
+  const stats = useMemo(() => {
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < THUMN_COUNT; i++) counts[s.stages[i] ?? 0]++;
     const growth = Array.from({ length: HIZB_COUNT }, (_, h) => {
@@ -141,42 +155,57 @@ export function GardenProvider({ children }: { children: ReactNode }) {
       for (let k = 0; k < THUMNS_PER_HIZB; k++) if ((s.stages[h * THUMNS_PER_HIZB + k] ?? 0) === MAX_STAGE) n++;
       return n;
     });
+    return { counts, growth };
+  }, [s.stages]);
+  const stageOf = useMemo(() => (i: number) => s.stages[i] ?? 0, [s.stages]);
+  const days = useMemo(
+    () => ({ streak: computeStreak(s.days), bestStreak: computeBest(s.days), activeDays: new Set(s.days).size }),
+    [s.days],
+  );
+
+  const plant = useCallback((slot: number, id: PlantId) => {
+    setS((p) => {
+      const done = id === MAPLE ? p.treeUnlocked : (() => {
+        let n = 0;
+        for (let k = 0; k < THUMNS_PER_HIZB; k++) if ((p.stages[hizbOf(id) * THUMNS_PER_HIZB + k] ?? 0) === MAX_STAGE) n++;
+        return n === THUMNS_PER_HIZB;
+      })();
+      if (!done) return p;
+      // one of each: planting it somewhere new moves it
+      const placed = p.placed.map((x) => (x === id ? null : x));
+      placed[slot] = id;
+      return { ...p, placed };
+    });
+  }, []);
+
+  const uproot = useCallback((slot: number) => {
+    setS((p) => {
+      if (!p.placed[slot]) return p;
+      const placed = [...p.placed];
+      placed[slot] = null;
+      return { ...p, placed };
+    });
+  }, []);
+
+  const value = useMemo<Value>(() => {
+    const { growth } = stats;
     const isUnlocked = (id: PlantId) => (id === MAPLE ? s.treeUnlocked : growth[hizbOf(id)] === THUMNS_PER_HIZB);
     return {
       ready,
       treeUnlocked: s.treeUnlocked,
       unlockTree,
-      stageOf: (i) => s.stages[i] ?? 0,
+      stageOf,
       water,
-      counts,
-      streak: computeStreak(s.days),
-      bestStreak: computeBest(s.days),
-      activeDays: new Set(s.days).size,
+      finish,
+      counts: stats.counts,
+      ...days,
       growth,
       isUnlocked,
       placed: s.placed,
-      plant: (slot, id) =>
-        setS((p) => {
-          const done = id === MAPLE ? p.treeUnlocked : (() => {
-            let n = 0;
-            for (let k = 0; k < THUMNS_PER_HIZB; k++) if ((p.stages[hizbOf(id) * THUMNS_PER_HIZB + k] ?? 0) === MAX_STAGE) n++;
-            return n === THUMNS_PER_HIZB;
-          })();
-          if (!done) return p;
-          // one of each: planting it somewhere new moves it
-          const placed = p.placed.map((x) => (x === id ? null : x));
-          placed[slot] = id;
-          return { ...p, placed };
-        }),
-      uproot: (slot) =>
-        setS((p) => {
-          if (!p.placed[slot]) return p;
-          const placed = [...p.placed];
-          placed[slot] = null;
-          return { ...p, placed };
-        }),
+      plant,
+      uproot,
     };
-  }, [s, ready, water, unlockTree]);
+  }, [s.treeUnlocked, s.placed, ready, stats, stageOf, days, water, finish, unlockTree, plant, uproot]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

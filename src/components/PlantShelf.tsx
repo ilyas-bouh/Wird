@@ -71,7 +71,7 @@ const Card = memo(function Card({
 });
 
 /** Horizontal list of every plant. The maple comes first; flowers unlock one hizb at a time. */
-export default function PlantShelf({ growth, treeUnlocked, placedIds, picked, onPick }: Props) {
+function PlantShelf({ growth, treeUnlocked, placedIds, picked, onPick }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
@@ -91,6 +91,8 @@ export default function PlantShelf({ growth, treeUnlocked, placedIds, picked, on
     />
   );
 }
+
+export default memo(PlantShelf);
 
 const makeStyles = (colors: Palette) => StyleSheet.create({
   list: { paddingHorizontal: 16, gap: 8 },

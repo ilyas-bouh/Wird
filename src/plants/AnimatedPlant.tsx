@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { ClipPath, Defs, G, Path, Rect } from 'react-native-svg';
 import PlantSvg from './art/Art';
@@ -48,10 +48,7 @@ const Half = memo(function Half({ index, w, h, from, to, id }: { index: number; 
   );
 });
 
-function Sway({ children, w, h, ms, deg, dx, phase }: { children: ReactNode; w: number; h: number; ms: number; deg: number; dx: number; phase: number }) {
-  const gust = useLoop(ms * 2.1, phase);
-  const flutter = useLoop(ms * 0.6, (phase * 3) % 1);
-  const sum = useMemo(() => Animated.add(gust, flutter), [gust, flutter]);
+function Sway({ children, w, h, sum, deg, dx }: { children: ReactNode; w: number; h: number; sum: ReturnType<typeof Animated.add>; deg: number; dx: number }) {
   const rotate = sum.interpolate({ inputRange: [0, 2], outputRange: [`${-deg * 0.55}deg`, `${deg * 1.45}deg`] });
   const translateX = sum.interpolate({ inputRange: [0, 2], outputRange: [-dx * 0.55, dx * 1.45] });
   return (
@@ -128,7 +125,7 @@ function Petal({ fx, i, s, seed }: { fx: Fx; i: number; s: number; seed: number 
   );
 }
 
-const PETALS = 6;
+const PETALS = 3;
 
 /** `width` is the drawn width in px of the plant's 120-unit box. */
 function AnimatedPlant({ id, width }: { id: PlantId; width: number }) {
@@ -139,15 +136,25 @@ function AnimatedPlant({ id, width }: { id: PlantId; width: number }) {
   const seed = index + 1;
   const phase = rnd(seed * 3.7);
   const ms = 1500 + rnd(seed) * 500;
+  // both halves share one wind (same timing), so run it once instead of twice
+  const gust = useLoop(ms * 2.1, phase);
+  const flutter = useLoop(ms * 0.6, (phase * 3) % 1);
+  const sum = useMemo(() => Animated.add(gust, flutter), [gust, flutter]);
+  // the plant appears at once; its drifting petals start a moment later so planting never stalls
+  const [petals, setPetals] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setPetals(true), 350);
+    return () => clearTimeout(id);
+  }, []);
   return (
     <View style={{ width, height: h }} pointerEvents="none">
-      <Sway w={width} h={h} ms={ms} deg={0.7} dx={0.35 * s} phase={phase}>
+      <Sway w={width} h={h} sum={sum} deg={0.7} dx={0.35 * s}>
         <Half index={index} w={width} h={h} from={-40} to={10} id={`lo${seed}`} />
       </Sway>
-      <Sway w={width} h={h} ms={ms} deg={2.6} dx={1.1 * s} phase={phase}>
+      <Sway w={width} h={h} sum={sum} deg={2.6} dx={1.1 * s}>
         <Half index={index} w={width} h={h} from={-130} to={-34} id={`hi${seed}`} />
       </Sway>
-      {Array.from({ length: PETALS }, (_, i) => (
+      {petals && Array.from({ length: PETALS }, (_, i) => (
         <Petal key={i} fx={fx} i={i} s={s} seed={seed} />
       ))}
     </View>

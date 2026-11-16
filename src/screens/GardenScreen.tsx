@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,8 +6,9 @@ import Garden3D from '../components/Garden3D';
 import GardenStats from '../components/GardenStats';
 import PlantShelf from '../components/PlantShelf';
 import { RedTreeScene } from '../components/RedTree';
-import { plantName, type PlantId } from '../plants/catalog';
-import Plant from '../components/Plant';
+import { plantId, plantName, type PlantId } from '../plants/catalog';
+import PlantArt from '../plants/PlantArt';
+import AnimatedPlant from '../plants/AnimatedPlant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
 import { usePortion } from '../context/PortionContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -33,22 +34,38 @@ const HizbRow = memo(function HizbRow({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const done = stages.filter((s) => s === MAX_STAGE).length;
+  const id = plantId(hizb);
+  const cellH = Math.round(cell * 1.3);
   return (
     <View style={styles.hizb}>
       <View style={styles.hizbHead}>
-        <Text style={styles.hizbTitle}>Hizb {hizb + 1}</Text>
+        <Text style={styles.hizbTitle}>Hizb {hizb + 1} · {plantName(id)}</Text>
         <Text style={styles.hizbCount}>{done}/{PER_ROW}</Text>
       </View>
+      {/* the hizb's own flower as an 8-step progression: slot 1 is the sprout, slot 8 the full bouquet
+          (swaying in the wind once the whole hizb is finished). Unfinished slots wait as faint ghosts. */}
       <View style={styles.row}>
         {stages.map((stage, k) => {
           const i = hizb * PER_ROW + k;
+          const finished = stage === MAX_STAGE;
+          const bloom = k === PER_ROW - 1 && finished;
+          const grow = stage / MAX_STAGE; // 0 unread .. 1 finished
           return (
             <Pressable
               key={i}
               onPress={() => onSelect(i)}
-              style={[styles.cell, { width: cell, height: cell }, i === selected && styles.cellSelected]}
+              style={[styles.cell, { width: cell, height: cellH }, i === selected && styles.cellSelected]}
             >
-              <Plant stage={stage} size={cell - 6} />
+              {bloom ? (
+                <AnimatedPlant id={id} width={cell + 2} />
+              ) : (
+                <View style={{ opacity: finished ? 1 : 0.28 + grow * 0.4, filter: `grayscale(${finished ? 0 : 1 - grow * 0.6})` }}>
+                  <Svg width={cell - 2} height={cellH - 4} viewBox="-65 -138 130 140">
+                    <PlantArt id={id} stage={k + 1} />
+                  </Svg>
+                </View>
+              )}
+              <View style={[styles.dot, finished && styles.dotOn]} />
             </Pressable>
           );
         })}
@@ -101,17 +118,21 @@ export default function GardenScreen() {
     [rows, currentHizb],
   );
 
+  // read through a ref so onSlot never changes: the island (and every planted flower) then skips re-rendering
+  const live = useRef({ placed, picked });
+  live.current = { placed, picked };
   const onSlot = useCallback(
     (slot: number) => {
-      if (placed[slot]) {
+      const { placed: cur, picked: pk } = live.current;
+      if (cur[slot]) {
         uproot(slot);
-      } else if (picked) {
-        plant(slot, picked);
+      } else if (pk) {
+        plant(slot, pk);
         setPicked(null);
         setNote('');
       }
     },
-    [placed, picked, plant, uproot],
+    [plant, uproot],
   );
 
   const onPick = useCallback(
@@ -206,7 +227,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   hizbTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   hizbCount: { fontSize: 12, color: colors.textMuted },
   row: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, padding: 4 },
-  cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  cell: { alignItems: 'center', justifyContent: 'flex-end', borderRadius: 10, paddingBottom: 3 },
   cellSelected: { backgroundColor: colors.mint },
+  dot: { position: 'absolute', bottom: 1, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.paleGreen },
+  dotOn: { backgroundColor: colors.accent },
   btnText: { color: colors.onAccent, fontWeight: '700' },
 });

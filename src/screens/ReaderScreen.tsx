@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StatusBar as RNStatusBar, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { setStatusBarHidden } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PageView, { type PageViewHandle } from '../components/PageView';
@@ -11,6 +12,8 @@ import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
 import TafsirSheet, { SHEET_HEIGHT } from '../components/TafsirSheet';
 import { useFocusMode } from '../context/FocusContext';
+import { MAX_STAGE, useGarden } from '../context/GardenContext';
+import { sealText, type SealText } from '../lib/seal';
 import { usePortion } from '../context/PortionContext';
 import { TEXT_STYLE, TEXT_STYLE_DARK, textStyleCss } from '../theme/reading';
 import { cropSvg, headerZones, selectRange } from '../lib/cropSvg';
@@ -31,8 +34,24 @@ async function loadSvg(module: number) {
   return new File(asset.localUri ?? asset.uri).text();
 }
 
-function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, colors: Palette) {
+type Seal = { text: SealText; done: boolean };
+
+function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, colors: Palette, seal: Seal) {
   const pages = svgs.map((s) => `<section class="page">${s.replace(/<\?xml[^>]*\?>/, '')}</section>`).join('');
+  const sealHtml = `<div class="seal-wrap" dir="rtl">
+  <button id="seal" class="seal${seal.done ? ' in done instant' : ''}" aria-label="${seal.text.title}">
+    <span class="shine"></span>
+    <svg class="star" viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,3 97,50 50,97 3,50"/><polygon points="19,19 81,19 81,81 19,81"/></svg>
+    <span class="body">
+      <svg class="check" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25"/><path d="M16 29l8.5 8.5L40 20"/></svg>
+      <span class="texts">
+        <span class="t ready"><b>${seal.text.title}</b><em>${seal.text.sub}</em></span>
+        <span class="t finished"><b>${seal.text.doneTitle}</b><em>${seal.text.doneSub}</em></span>
+      </span>
+    </span>
+  </button>
+  <div class="burst"></div>
+</div>`;
   const button = `<div class="next"><button id="next" ${next.enabled ? '' : 'disabled'}>${next.label}</button></div>`;
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -42,16 +61,92 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, co
   svg { display: block; width: 100%; height: auto; }
   svg path:not(.ayahPolygon) { pointer-events: none; }
   #content, #ayah_markers { pointer-events: none; }${textStyleCss(colors.dark ? TEXT_STYLE_DARK : TEXT_STYLE)}
-  .next { padding: 28px 24px 120px; text-align: center; }
+  .next { padding: 4px 24px 120px; text-align: center; }
+  /* ---- completion seal: a squircle that pops in, shines and bursts into petals ---- */
+  .seal-wrap { position: relative; display: flex; justify-content: center; padding: 44px 18px 10px; }
+  .seal { position: relative; width: min(84vw, 300px); aspect-ratio: 1.12 / 1; border: 0; border-radius: 38px; padding: 0;
+          overflow: hidden; color: ${colors.onAccent}; cursor: pointer; -webkit-tap-highlight-color: transparent;
+          font-family: 'Noto Naskh Arabic', 'Amiri', serif; background: linear-gradient(145deg, ${colors.accent}, ${colors.darkGreen});
+          box-shadow: 0 18px 38px -14px ${colors.accent}, inset 0 1px 0 rgba(255,255,255,.35), inset 0 -10px 24px rgba(0,0,0,.18);
+          opacity: 0; transform: translateY(28px) scale(.9); animation: breathe 3.4s ease-in-out infinite; }
+  .seal.in { opacity: 1; transform: none; transition: opacity .6s ease, transform .8s cubic-bezier(.2,1.35,.4,1); }
+  .seal.in:active { transform: scale(.96); transition-duration: .12s; }
+  .seal::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity .7s ease;
+                  background: linear-gradient(145deg, #E2B646, ${colors.accent} 75%); }
+  .seal.done::before { opacity: 1; }
+  .seal .shine { position: absolute; inset: -60% -40%; z-index: 2; pointer-events: none;
+                 background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.38) 50%, transparent 58%);
+                 transform: translateX(-130%); animation: sweep 4.6s ease-in-out 1.2s infinite; }
+  .seal .star { position: absolute; right: -34px; bottom: -34px; width: 190px; height: 190px; fill: none; stroke: #fff;
+                stroke-width: 1.6; opacity: .16; animation: spin 40s linear infinite; }
+  .seal .body { position: relative; z-index: 3; height: 100%; display: flex; flex-direction: column; align-items: center;
+                justify-content: center; gap: 12px; padding: 18px 22px; text-align: center; }
+  .seal .check { width: 58px; height: 58px; fill: rgba(255,255,255,.14); stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .seal .check path { stroke-dasharray: 60; stroke-dashoffset: 60; stroke-opacity: 0; }
+  .seal.done .check { fill: rgba(255,255,255,.28); }
+  .seal.done .check path { stroke-dashoffset: 0; stroke-opacity: 1; transition: stroke-dashoffset .6s ease .25s, stroke-opacity .1s ease .25s; }
+  .seal .texts { display: grid; }
+  .seal .t { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 4px; transition: opacity .45s ease, transform .45s ease; }
+  .seal .t b { font-size: 25px; line-height: 1.35; font-weight: 700; }
+  .seal .t em { font-size: 16px; font-style: normal; opacity: .9; line-height: 1.5; }
+  .seal .t.finished { opacity: 0; transform: translateY(10px); }
+  .seal.done .t.ready { opacity: 0; transform: translateY(-10px); }
+  .seal.done .t.finished { opacity: 1; transform: none; }
+  .seal.instant, .seal.instant * { transition: none !important; }
+  .seal.done { animation: breathe-gold 3.4s ease-in-out infinite; }
+  .burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 5; }
+  .burst i { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 3px;
+             animation: fly 1s cubic-bezier(.1,.75,.3,1) forwards; }
+  @keyframes breathe { 0%,100% { box-shadow: 0 18px 38px -14px ${colors.accent}, inset 0 1px 0 rgba(255,255,255,.35), inset 0 -10px 24px rgba(0,0,0,.18); }
+                       50% { box-shadow: 0 22px 52px -10px ${colors.accent}, inset 0 1px 0 rgba(255,255,255,.35), inset 0 -10px 24px rgba(0,0,0,.18); } }
+  @keyframes breathe-gold { 0%,100% { box-shadow: 0 18px 38px -14px #E2B646, inset 0 1px 0 rgba(255,255,255,.4); }
+                            50% { box-shadow: 0 22px 54px -8px #E2B646, inset 0 1px 0 rgba(255,255,255,.4); } }
+  @keyframes sweep { 0% { transform: translateX(-130%); } 55%,100% { transform: translateX(130%); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fly { 0% { transform: translate(0,0) rotate(0) scale(.4); opacity: 1; }
+                   100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); opacity: 0; } }
   button { font-size: 17px; padding: 14px 28px; border: 0; border-radius: 999px;
            background: ${colors.accent}; color: ${colors.onAccent}; font-family: sans-serif; }
   button[disabled] { background: ${colors.mint}; color: ${colors.textMuted}; }
-</style></head><body>${pages}${button}
+  /* "Next" is a quiet secondary action: a small muted text link, not a button */
+  #next { background: transparent; color: ${colors.textMuted}; opacity: .5; font-size: 13px; padding: 10px 14px;
+          border-radius: 10px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+          font-family: sans-serif; transition: opacity .25s ease; }
+  #next:active { opacity: .9; }
+  #next[disabled] { background: transparent; opacity: .28; text-decoration: none; }
+</style></head><body>${pages}${sealHtml}${button}
 <script>
   // Native: React Native WebView bridge; web: the page runs in an iframe and posts to its parent.
   function post(m) {
     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(m);
     else window.parent.postMessage({ wird: m }, '*');
+  }
+  // Completion seal: pops in when scrolled to, bursts and turns gold when pressed.
+  var seal = document.getElementById('seal');
+  if (seal) {
+    if (!seal.classList.contains('in')) {
+      new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) seal.classList.add('in'); });
+      }, { threshold: 0.35 }).observe(seal);
+    }
+    seal.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (seal.classList.contains('done')) return;
+      seal.classList.add('done');
+      var box = document.querySelector('.burst');
+      var cols = ['${colors.mint}', '#F4D06F', '#FFFFFF', '${colors.accent}'];
+      for (var i = 0; i < 26; i++) {
+        var p = document.createElement('i'), a = Math.random() * Math.PI * 2, d = 90 + Math.random() * 130;
+        p.style.setProperty('--dx', Math.cos(a) * d + 'px');
+        p.style.setProperty('--dy', Math.sin(a) * d + 'px');
+        p.style.setProperty('--rot', Math.round(Math.random() * 540 - 270) + 'deg');
+        p.style.background = cols[i % cols.length];
+        p.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
+        box.appendChild(p);
+      }
+      setTimeout(function () { box.innerHTML = ''; }, 1400);
+      post('done');
+    });
   }
   var b = document.getElementById('next');
   b.addEventListener('click', function (e) { e.stopPropagation(); post('next'); });
@@ -107,6 +202,7 @@ export default function ReaderScreen() {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { focused, setFocused } = useFocusMode();
+  const { finish, stageOf } = useGarden();
 
   const webRef = useRef<PageViewHandle>(null);
   const [ayahs, setAyahs] = useState<AyahRef[]>([]);
@@ -151,7 +247,9 @@ export default function ReaderScreen() {
           const others = PAGE_JSONS[p].filter((e) => !inRange.includes(e)).map((e) => e.polygon);
           out.push(cropSvg(svg, inRange.map((e) => e.polygon), { width: STRIP_WIDTH, zones, cover: others, paper: colors.paper }));
         }
-        const nextIndex = Math.floor(index / step) * step + step;
+        const first = Math.floor(index / step) * step; // the portion's thumns: one in thomon mode, two in rub' mode
+        const done = Array.from({ length: step }, (_, k) => first + k).every((i) => stageOf(i) === MAX_STAGE);
+        const nextIndex = first + step;
         const next = nextIndex < 480 ? portionAt(mode, nextIndex) : null;
         const noun = mode === 'rub' ? "rub'" : 'thomon';
         const hasNext = !!next && next.end.page <= BUNDLED_PAGES;
@@ -162,7 +260,7 @@ export default function ReaderScreen() {
             : `${noun[0].toUpperCase()}${noun.slice(1)} ${next.n}: pages not bundled yet`;
         if (!cancelled) {
           setAyahs(list);
-          setHtml(buildHtml(out, { label, enabled: hasNext }, colors));
+          setHtml(buildHtml(out, { label, enabled: hasNext }, colors, { text: sealText(mode, portionAt(mode, index).n), done }));
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -176,7 +274,12 @@ export default function ReaderScreen() {
 
   const onMessage = (msg: string) => {
     if (msg === 'next') setIndex((i) => Math.floor(i / step) * step + step);
-    else if (msg === 'tap') setFocused((f) => !f);
+    else if (msg === 'done') {
+      // the completion seal: a little buzz, and the whole portion grows its plant
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      const first = Math.floor(index / step) * step;
+      finish(Array.from({ length: step }, (_, k) => first + k));
+    } else if (msg === 'tap') setFocused((f) => !f);
     else if (msg === 'swipe:left') swipeNavigate('left');
     else if (msg === 'swipe:right') swipeNavigate('right');
     else if (msg.startsWith('ayah:')) {
