@@ -6,7 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
 import { useFocusMode } from '../context/FocusContext';
-import { useSwipeX } from './SwipeNav';
+import { useReportBarHeight, useSwipeX } from './SwipeNav';
+import { fonts } from '../theme/fonts';
+import { useOnboarding } from '../context/OnboardingContext';
+import { useI18n } from '../i18n/I18nContext';
 
 const ICONS: Record<string, ImageSourcePropType> = {
   Garden: require('../../assets/icons/garden.png'),
@@ -14,10 +17,10 @@ const ICONS: Record<string, ImageSourcePropType> = {
   Tafsir: require('../../assets/icons/tafsir.png'),
 };
 
-const BAR_HEIGHT = 68;
-const BLOB_W = 76;
-const BLOB_H = 56;
-const ICON = 36;
+const BAR_HEIGHT = 80;
+const BLOB_W = 92;
+const BLOB_H = 68;
+const ICON = 34;
 
 // Organic blob in a 100x80 box.
 const BLOB_PATH =
@@ -29,6 +32,14 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
   const insets = useSafeAreaInsets();
   const { focused } = useFocusMode();
   const swipeX = useSwipeX();
+  const reportH = useReportBarHeight();
+  const { t, lang } = useI18n();
+  const onb = useOnboarding();
+  const hidden = onb.active || (focused && state.routes[state.index].name === 'Reader');
+  // focus mode hides the bar, so the fade veil should then cover the whole screen
+  useEffect(() => {
+    if (hidden) reportH(0);
+  }, [hidden, reportH]);
   // The screens slide on swipe; cancel that offset so the tab bar stays put.
   const holdStill = useRef(swipeX ? Animated.multiply(swipeX, -1) : new Animated.Value(0)).current;
   const [width, setWidth] = useState(0);
@@ -66,10 +77,13 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
   const trailScale = stretch.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] });
 
   // Focus mode: the Reader hides the tab bar until the page is tapped.
-  if (focused && state.routes[state.index].name === 'Reader') return null;
+  if (hidden) return null;
 
   return (
-    <Animated.View style={[styles.wrap, { paddingBottom: insets.bottom, transform: [{ translateX: holdStill }] }]}>
+    <Animated.View
+      onLayout={(e) => reportH(e.nativeEvent.layout.height)}
+      style={[styles.wrap, { paddingBottom: insets.bottom, transform: [{ translateX: holdStill }] }]}
+    >
       <View style={styles.bar} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {width > 0 && (
           <>
@@ -82,15 +96,14 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
               style={[styles.blob, { transform: [{ translateX }, { scaleX }, { scaleY }] }]}
             >
               <Svg width={BLOB_W} height={BLOB_H} viewBox="0 0 100 80" preserveAspectRatio="none">
-                <Path d={BLOB_PATH} fill={colors.mint} fillOpacity={0.85} />
+                <Path d={BLOB_PATH} fill={colors.mint} fillOpacity={0.55} />
               </Svg>
             </Animated.View>
           </>
         )}
         {state.routes.map((route, index) => {
           const focused = state.index === index;
-          const { options } = descriptors[route.key];
-          const label = options.title ?? route.name;
+          const label = t(`tab.${route.name}` as 'tab.Garden');
           const onPress = () => {
             const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!focused && !e.defaultPrevented) navigation.navigate(route.name, route.params);
@@ -104,8 +117,8 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
               onPress={onPress}
               style={styles.tab}
             >
-              <Image source={ICONS[route.name]} style={[styles.icon, { opacity: focused ? 1 : 0.65 }]} />
-              <Text style={[styles.label, focused && styles.labelActive]}>{label}</Text>
+              <Image source={ICONS[route.name]} style={[styles.icon, { opacity: focused ? 1 : 0.6, transform: [{ scale: focused ? 1.06 : 0.94 }] }]} />
+              <Text style={[styles.label, focused && styles.labelActive, lang === 'ar' && { fontFamily: focused ? fonts.arBold : fonts.ar, fontSize: 13, letterSpacing: 0 }]}>{label}</Text>
             </Pressable>
           );
         })}
@@ -114,13 +127,25 @@ export default function BlobTabBar({ state, descriptors, navigation }: BottomTab
   );
 }
 const makeStyles = (colors: Palette) => StyleSheet.create({
-  wrap: { backgroundColor: colors.paleGreen },
+  wrap: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.mint,
+    paddingTop: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 18,
+  },
   bar: { height: BAR_HEIGHT, flexDirection: 'row', alignItems: 'center' },
   tab: { flex: 1, height: BAR_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   icon: { width: ICON, height: ICON, borderRadius: 9 },
-  label: { fontSize: 11, marginTop: 2, color: colors.textMuted },
-  labelActive: { color: colors.accent, fontWeight: '600' },
-  blob: { position: 'absolute', left: 0, top: (BAR_HEIGHT - BLOB_H) / 2 - 2, width: BLOB_W, height: BLOB_H },
+  label: { fontSize: 11, marginTop: 4, letterSpacing: 0.4, fontFamily: fonts.ui, color: colors.textMuted },
+  labelActive: { color: colors.accent, fontFamily: fonts.uiBold },
+  blob: { position: 'absolute', left: 0, top: (BAR_HEIGHT - BLOB_H) / 2, width: BLOB_W, height: BLOB_H },
   trail: {
     position: 'absolute',
     left: 0,
@@ -129,6 +154,6 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
     height: 28,
     borderRadius: 14,
     backgroundColor: colors.mint,
-    opacity: 0.6,
+    opacity: 0.5,
   },
 });

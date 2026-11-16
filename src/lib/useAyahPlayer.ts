@@ -12,15 +12,18 @@ export const hasAudio = (a: AyahRef) => ayahKey(a) in AYAH_AUDIO;
  * Plays the given ayahs one after another from the local MP3s and reports the current ayah.
  * Ayahs without a local MP3 are skipped.
  */
-export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => void) {
+export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => void, single = false) {
   const [state, setState] = useState<PlayerState>('idle');
   const stateRef = useRef<PlayerState>('idle');
   const player = useRef<AudioPlayer | null>(null);
   const idx = useRef(-1);
   const list = useRef(ayahs);
   list.current = ayahs;
+  const singleRef = useRef(single); // play just the chosen ayah, then stop
+  singleRef.current = single;
   const cb = useRef(onAyah);
   cb.current = onAyah;
+  const stopRef = useRef<() => void>(() => {});
   const playAtRef = useRef<(from: number) => void>(() => {});
 
   const set = (s: PlayerState) => {
@@ -33,7 +36,10 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
       setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
       const p = createAudioPlayer();
       p.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish && stateRef.current === 'playing') playAtRef.current(idx.current + 1);
+        if (status.didJustFinish && stateRef.current === 'playing') {
+          if (singleRef.current) stopRef.current();
+          else playAtRef.current(idx.current + 1);
+        }
       });
       player.current = p;
     }
@@ -47,6 +53,7 @@ export function useAyahPlayer(ayahs: AyahRef[], onAyah: (a: AyahRef | null) => v
     cb.current(null);
   }, []);
 
+  stopRef.current = stop;
   playAtRef.current = (from: number) => {
     const l = list.current;
     let i = from;

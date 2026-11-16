@@ -1,8 +1,10 @@
 import { memo, useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import Text from './AppText';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import PlantArt from '../plants/PlantArt';
-import { FULL_GROWTH, HIZB_COUNT, MAPLE, THUMNS_PER_HIZB, plantId, plantName, type PlantId } from '../plants/catalog';
+import { FULL_GROWTH, HIZB_COUNT, MAPLE, THUMNS_PER_HIZB, plantId, type PlantId } from '../plants/catalog';
+import { useI18n } from '../i18n/I18nContext';
 import RedTreeArt from './RedTree';
 import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
@@ -44,6 +46,7 @@ const Card = memo(function Card({
   onPick: (id: PlantId, unlocked: boolean) => void;
 }) {
   const { colors } = useTheme();
+  const { plantName } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Pressable onPress={() => onPick(id, unlocked)} style={[styles.card, picked && styles.cardOn, !unlocked && styles.cardLocked]}>

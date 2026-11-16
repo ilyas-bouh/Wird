@@ -1,26 +1,23 @@
 import type { PortionMode } from './ranges';
-
-// Words for the portion in the first person: "my thumn" / "my rub'", and the genitive for "a thumn of".
-const NOUN = {
-  thumn: { mine: 'ثمني', of: 'ثمنٍ', the: 'الثمن' },
-  rub: { mine: 'ربعي', of: 'ربعٍ', the: 'الربع' },
-} as const;
+import type { StringKey } from '../i18n/I18nContext';
 
 export type SealText = { title: string; sub: string; doneTitle: string; doneSub: string };
 
+type T = (key: StringKey, vars?: Record<string, string | number>) => string;
+
+const LINES = ['seal.l1', 'seal.l2', 'seal.l3', 'seal.l4', 'seal.l5'] as const;
+
 /**
- * What the completion seal says: "I finished my thumn / rub'", said with a smile.
+ * What the completion seal says: "I finished my thumn / rub'", said with a smile, in the app's language.
  * The line is chosen by the portion number, so it varies day to day but is stable while reading.
  */
-export function sealText(mode: PortionMode, n: number): SealText {
-  const w = NOUN[mode];
-  const lines: { title: string; sub: string }[] = [
-    { title: `ختمتُ ${w.mine} اليوم`, sub: 'والحديقة تبتسم لي 🌱' },
-    { title: `${w.mine} في الجيب`, sub: 'ونوره في القلب' },
-    { title: `سقيتُ زهرتي بـ${w.of} من القرآن`, sub: 'وستكبر بإذن الله 🌿' },
-    { title: `أتممتُ ${w.mine}… وبقي الأجر`, sub: 'يا له من وردٍ طيّب ✨' },
-    { title: 'وردي اليوم تمّ', sub: `و${w.the} هذا في سجلّ النور` },
-  ];
-  const l = lines[(n - 1 + lines.length * 1000) % lines.length];
-  return { ...l, doneTitle: 'تقبّل الله منك', doneSub: 'نبتت ورقةٌ جديدة في حديقتك 🍃' };
+export function sealText(t: T, mode: PortionMode, n: number): SealText {
+  const vars = { mine: t(`seal.mine.${mode}` as StringKey), of: t(`seal.of.${mode}` as StringKey), the: t(`seal.the.${mode}` as StringKey) };
+  const line = LINES[(n - 1 + LINES.length * 1000) % LINES.length];
+  return {
+    title: t(`${line}.t` as StringKey, vars),
+    sub: t(`${line}.s` as StringKey, vars),
+    doneTitle: t('seal.doneTitle'),
+    doneSub: t('seal.doneSub'),
+  };
 }

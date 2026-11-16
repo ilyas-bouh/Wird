@@ -1,8 +1,10 @@
 import { memo, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Text from './AppText';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
+import { useI18n, type StringKey } from '../i18n/I18nContext';
 
 export type StatsData = {
   blooming: number;
@@ -49,6 +51,7 @@ function Icon({ name, color, size = 18 }: { name: IconName; color: string; size?
 /** circular progress with the percentage in the middle */
 function Ring({ pct, size = 92 }: { pct: number; size?: number }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const r = size / 2 - 8;
   const c = 2 * Math.PI * r;
@@ -77,53 +80,54 @@ function Ring({ pct, size = 92 }: { pct: number; size?: number }) {
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <View style={styles.ringText}>
           <Text style={styles.ringValue}>{pct >= 0.1 || pct === 0 ? Math.round(pct * 100) : (pct * 100).toFixed(1)}%</Text>
-          <Text style={styles.ringLabel}>of Quran</Text>
+          <Text style={styles.ringLabel}>{t('stats.ofQuran')}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-const TILES: { key: keyof StatsData | 'hizbs' | 'garden'; label: string; icon: IconName; tint: string; bg: string }[] = [
-  { key: 'hizbs', label: 'Hizbs finished', icon: 'book', tint: '#2E7D32', bg: '#DDF1D8' },
-  { key: 'growing', label: 'Growing now', icon: 'sprout', tint: '#6A8F1E', bg: '#EAF3CB' },
-  { key: 'garden', label: 'In the garden', icon: 'island', tint: '#1F7A8C', bg: '#D6EEF2' },
-  { key: 'bestStreak', label: 'Best streak', icon: 'trophy', tint: '#B8860B', bg: '#FBEFC8' },
-  { key: 'activeDays', label: 'Active days', icon: 'calendar', tint: '#7B4FB8', bg: '#E9DFF6' },
-  { key: 'blooming', label: 'Thumns in bloom', icon: 'flower', tint: '#D2457A', bg: '#FBDCE8' },
+const TILES: { key: keyof StatsData | 'hizbs' | 'garden'; label: StringKey; icon: IconName; tint: string; bg: string }[] = [
+  { key: 'hizbs', label: 'stats.hizbs', icon: 'book', tint: '#2E7D32', bg: '#DDF1D8' },
+  { key: 'growing', label: 'stats.growing', icon: 'sprout', tint: '#6A8F1E', bg: '#EAF3CB' },
+  { key: 'garden', label: 'stats.garden', icon: 'island', tint: '#1F7A8C', bg: '#D6EEF2' },
+  { key: 'bestStreak', label: 'stats.bestStreak', icon: 'trophy', tint: '#B8860B', bg: '#FBEFC8' },
+  { key: 'activeDays', label: 'stats.activeDays', icon: 'calendar', tint: '#7B4FB8', bg: '#E9DFF6' },
+  { key: 'blooming', label: 'stats.blooming', icon: 'flower', tint: '#D2457A', bg: '#FBDCE8' },
 ];
 
 function GardenStats({ d }: { d: StatsData }) {
   const { colors } = useTheme();
+  const { t, rtl } = useI18n();
+  const row = rtl ? 'row-reverse' : 'row';
+  const start = rtl ? 'flex-end' : 'flex-start';
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const pct = d.blooming / d.totalThumns;
   const value = (k: (typeof TILES)[number]['key']) =>
     k === 'hizbs' ? `${d.hizbsDone}/${d.hizbTotal}` : k === 'garden' ? `${d.planted}/${d.slots}` : String(d[k as keyof StatsData]);
   return (
     <View style={styles.wrap}>
-      <View style={styles.hero}>
+      <View style={[styles.hero, { flexDirection: row }]}>
         <Ring pct={pct} />
-        <View style={styles.heroText}>
-          <Text style={styles.heroTitle}>Your progress</Text>
-          <Text style={styles.heroSub}>
-            {d.blooming} of {d.totalThumns} thumns in bloom
-          </Text>
-          <View style={styles.streak}>
+        <View style={[styles.heroText, { alignItems: start }]}>
+          <Text style={styles.heroTitle}>{t('stats.progress')}</Text>
+          <Text style={styles.heroSub}>{t('stats.bloomSub', { a: d.blooming, b: d.totalThumns })}</Text>
+          <View style={[styles.streak, { flexDirection: row, alignSelf: start }]}>
             <Icon name="flame" color="#F57C00" size={20} />
             <Text style={styles.streakValue}>{d.streak}</Text>
-            <Text style={styles.streakLabel}>day streak</Text>
+            <Text style={styles.streakLabel}>{t('stats.streak')}</Text>
           </View>
         </View>
       </View>
-      <View style={styles.grid}>
-        {TILES.map((t) => (
-          <View key={t.label} style={styles.tile}>
-            <View style={[styles.iconBubble, { backgroundColor: colors.dark ? `${t.tint}33` : t.bg }]}>
-              <Icon name={t.icon} color={t.tint} />
+      <View style={[styles.grid, { flexDirection: row }]}>
+        {TILES.map((tile) => (
+          <View key={tile.label} style={[styles.tile, { alignItems: start }]}>
+            <View style={[styles.iconBubble, { backgroundColor: colors.dark ? `${tile.tint}33` : tile.bg }]}>
+              <Icon name={tile.icon} color={tile.tint} />
             </View>
-            <Text style={styles.tileValue}>{value(t.key)}</Text>
+            <Text style={styles.tileValue}>{value(tile.key)}</Text>
             <Text style={styles.tileLabel} numberOfLines={1}>
-              {t.label}
+              {t(tile.label)}
             </Text>
           </View>
         ))}

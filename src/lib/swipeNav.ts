@@ -26,3 +26,8 @@ export function swipeNavigate(dir: 'left' | 'right') {
   if (animator) animator(dir);
   else goSwipe(dir);
 }
+
+/** Jump straight to a tab (used by the first-run tour). */
+export function swipeNavigateTo(name: keyof Tabs) {
+  if (navigationRef.isReady()) navigationRef.navigate(name);
+}

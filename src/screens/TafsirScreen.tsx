@@ -5,8 +5,8 @@ import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import { usePortion } from '../context/PortionContext';
-import { ayahsInPortion, portionAt, surahName, type AyahPos } from '../lib/ranges';
-import { ayahChipAr, pagesAr, portionRangeAr, portionTitleAr } from '../lib/arabic';
+import { ayahsInPortion, portionAt, type AyahPos } from '../lib/ranges';
+import { useI18n } from '../i18n/I18nContext';
 import { EDITIONS, getTafsirBatch, hafsKeysFor, type TafsirLang } from '../lib/tafsir';
 
 type Section = { surah: number; warsh: AyahPos[]; hafs: string[] };
@@ -36,10 +36,11 @@ function buildSections(ayahs: AyahPos[]): Section[] {
 /** Full tafsir (Al-Muyassar / Al-Mukhtasar) of the whole thomon or rub' the Reader is on. */
 export default function TafsirScreen() {
   const { colors } = useTheme();
+  const { t, rtl: uiRtl, lang: uiLang, portionTitle, portionRange, pages, ayahChip, surah } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { thumnIndex, mode } = usePortion(); // follows the Reader and the portion setting
-  const [lang, setLang] = useState<TafsirLang>('ar');
+  const [lang, setLang] = useState<TafsirLang>(uiLang);
   const [texts, setTexts] = useState<Record<string, string> | null>(null);
 
   const portion = useMemo(() => portionAt(mode, thumnIndex), [mode, thumnIndex]);
@@ -58,14 +59,15 @@ export default function TafsirScreen() {
   }, [lang, hafsKeys]);
 
   const topPad = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) : 0) + 12;
-  const rtl = lang === 'ar';
+  const rtl = lang === 'ar'; // the tafsir text itself
+  const head = { textAlign: uiRtl ? 'right' : 'left', writingDirection: uiRtl ? 'rtl' : 'ltr' } as const;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: topPad, paddingBottom: 32 }]}>
       <View style={styles.hero}>
-        <Text style={styles.title}>{portionTitleAr(portion)}</Text>
-        <Text style={styles.range}>{portionRangeAr(portion)}</Text>
-        <Text style={styles.meta}>{pagesAr(portion)}</Text>
-        <View style={styles.row}>
+        <Text style={[styles.title, head]}>{portionTitle(portion)}</Text>
+        <Text style={[styles.range, head]}>{portionRange(portion)}</Text>
+        <Text style={[styles.meta, head]}>{pages(portion)}</Text>
+        <View style={[styles.row, { justifyContent: uiRtl ? 'flex-start' : 'flex-end' }]}>
           <Segmented
             value={lang}
             onChange={(v) => setLang(v as TafsirLang)}
@@ -89,20 +91,16 @@ export default function TafsirScreen() {
           return (
             <View key={label(sec.warsh[0])}>
               {newSurah && (
-                <Text style={styles.surah}>سورة {surahName(sec.surah).ar}</Text>
+                <Text style={styles.surah}>{t('tafsir.surah', { name: surah(sec.surah) })}</Text>
               )}
               <View style={styles.card}>
-                <View style={styles.cardHead}>
-                  <Text style={styles.chip}>{ayahChipAr(sec.warsh)}</Text>
+                <View style={[styles.cardHead, uiRtl && { flexDirection: 'row-reverse' }]}>
+                  <Text style={styles.chip}>{ayahChip(sec.warsh)}</Text>
                 </View>
                 {text ? (
                   <Text style={[styles.text, rtl && styles.rtl]}>{text}</Text>
                 ) : (
-                  <Text style={styles.missing}>
-                    {sec.hafs.length
-                      ? 'لا يوجد تفسير لهذه الآية.'
-                      : 'التفسير غير متوفر بعد لهذه الآية (يغطي الربط حتى سورة البقرة، الآية ١١٠).'}
-                  </Text>
+                  <Text style={[styles.missing, head]}>{sec.hafs.length ? t('tafsir.noneFound') : t('tafsir.notMapped')}</Text>
                 )}
               </View>
             </View>
@@ -110,9 +108,7 @@ export default function TafsirScreen() {
         })}
       {texts && (
         <Text style={styles.note}>
-          {lang === 'ar'
-            ? `${EDITIONS.ar.label}. عند اختلاف عدّ الآيات بين ورش وحفص يُجمع التفسير تحت آيات ورش التي يغطيها.`
-            : `${EDITIONS.en.label}. Where Warsh and Hafs divide the verses differently, the tafsir is grouped under the Warsh ayahs it covers.`}
+          {EDITIONS[lang].label}. {t('tafsir.screenNote')}
         </Text>
       )}
     </ScrollView>
@@ -145,9 +141,9 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   content: { paddingHorizontal: 16 },
   hero: { backgroundColor: colors.paleGreen, borderRadius: 20, padding: 18, marginBottom: 8 },
-  title: { fontSize: 30, fontFamily: fonts.arBold, color: colors.darkGreen, textAlign: 'right', writingDirection: 'rtl' },
-  range: { marginTop: 6, fontSize: 18, fontFamily: fonts.ar, color: colors.text, textAlign: 'right', writingDirection: 'rtl', lineHeight: 32 },
-  meta: { marginTop: 2, fontSize: 15, fontFamily: fonts.ar, color: colors.textMuted, textAlign: 'right', writingDirection: 'rtl' },
+  title: { fontSize: 30, fontFamily: fonts.arBold, color: colors.darkGreen },
+  range: { marginTop: 6, fontSize: 18, fontFamily: fonts.ar, color: colors.text, lineHeight: 32 },
+  meta: { marginTop: 2, fontSize: 15, fontFamily: fonts.ar, color: colors.textMuted },
   row: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 10 },
   seg: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 14, padding: 3 },
   segItem: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 11 },

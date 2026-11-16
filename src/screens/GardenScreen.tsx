@@ -1,12 +1,17 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Text from '../components/AppText';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Garden3D from '../components/Garden3D';
+import InsectLayer from '../components/InsectLayer';
 import GardenStats from '../components/GardenStats';
 import PlantShelf from '../components/PlantShelf';
-import { RedTreeScene } from '../components/RedTree';
-import { plantId, plantName, type PlantId } from '../plants/catalog';
+import { MAPLE, plantId, type PlantId } from '../plants/catalog';
+import { useI18n } from '../i18n/I18nContext';
+import { useOnboarding } from '../context/OnboardingContext';
+import { CoachCard, Pointer } from '../components/CoachMark';
+import SettingsScreen from './SettingsScreen';
 import PlantArt from '../plants/PlantArt';
 import AnimatedPlant from '../plants/AnimatedPlant';
 import { MAX_STAGE, THUMN_COUNT, useGarden } from '../context/GardenContext';
@@ -21,47 +26,56 @@ const hizbs = Array.from({ length: HIZB_COUNT }, (_, h) => h);
 const HizbRow = memo(function HizbRow({
   hizb,
   stages,
+  step,
   selected,
   cell,
   onSelect,
+  upcoming,
 }: {
   hizb: number;
+  /** the next hizb, shown grayed out and not tappable until it is reached */
+  upcoming: boolean;
   stages: number[];
+  /** thumns per field: 1 in thumn mode (8 fields), 2 in rub' mode (4 fields) */
+  step: number;
   selected: number;
   cell: number;
   onSelect: (i: number) => void;
 }) {
   const { colors } = useTheme();
+  const { t, plantName, rtl } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const done = stages.filter((s) => s === MAX_STAGE).length;
+  const groups = Array.from({ length: PER_ROW / step }, (_, j) => stages.slice(j * step, (j + 1) * step));
+  const done = groups.filter((g) => g.every((s) => s === MAX_STAGE)).length;
   const id = plantId(hizb);
   const cellH = Math.round(cell * 1.3);
   return (
-    <View style={styles.hizb}>
-      <View style={styles.hizbHead}>
-        <Text style={styles.hizbTitle}>Hizb {hizb + 1} · {plantName(id)}</Text>
-        <Text style={styles.hizbCount}>{done}/{PER_ROW}</Text>
+    <View style={[styles.hizb, upcoming && { opacity: 0.4 }]} pointerEvents={upcoming ? 'none' : 'auto'}>
+      <View style={[styles.hizbHead, rtl && { flexDirection: 'row-reverse' }]}>
+        <Text style={styles.hizbTitle} numberOfLines={1}>{t('garden.hizbTitle', { n: hizb + 1, name: plantName(id) })}</Text>
+        <Text style={styles.hizbCount}>{done}/{groups.length}</Text>
       </View>
-      {/* the hizb's own flower as an 8-step progression: slot 1 is the sprout, slot 8 the full bouquet
-          (swaying in the wind once the whole hizb is finished). Unfinished slots wait as faint ghosts. */}
+      {/* the hizb's own flower as a progression: with thumns, 8 fields (stages 1..8); with rub', 4 fields that show
+          stages 2, 4, 6, 8. The last is the full bouquet (swaying once the whole hizb is finished). Unfinished
+          fields wait as faint ghosts. */}
       <View style={styles.row}>
-        {stages.map((stage, k) => {
-          const i = hizb * PER_ROW + k;
-          const finished = stage === MAX_STAGE;
-          const bloom = k === PER_ROW - 1 && finished;
-          const grow = stage / MAX_STAGE; // 0 unread .. 1 finished
+        {groups.map((g, k) => {
+          const i = hizb * PER_ROW + k * step; // first thumn of this field
+          const finished = g.every((s) => s === MAX_STAGE);
+          const bloom = k === groups.length - 1 && finished;
+          const grow = g.reduce((a, s) => a + s, 0) / (g.length * MAX_STAGE); // 0 unread .. 1 finished
           return (
             <Pressable
               key={i}
               onPress={() => onSelect(i)}
-              style={[styles.cell, { width: cell, height: cellH }, i === selected && styles.cellSelected]}
+              style={[styles.cell, { width: cell, height: cellH }, selected >= i && selected < i + step && styles.cellSelected]}
             >
               {bloom ? (
                 <AnimatedPlant id={id} width={cell + 2} />
               ) : (
                 <View style={{ opacity: finished ? 1 : 0.28 + grow * 0.4, filter: `grayscale(${finished ? 0 : 1 - grow * 0.6})` }}>
                   <Svg width={cell - 2} height={cellH - 4} viewBox="-65 -138 130 140">
-                    <PlantArt id={id} stage={k + 1} />
+                    <PlantArt id={id} stage={(k + 1) * step} />
                   </Svg>
                 </View>
               )}
@@ -76,18 +90,40 @@ const HizbRow = memo(function HizbRow({
 
 export default function GardenScreen() {
   const { colors, dark, toggle } = useTheme();
+  const { t, plantName, rtl } = useI18n();
+  const rtlAlign = rtl ? ({ textAlign: 'right' } as const) : undefined;
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { ready, treeUnlocked, unlockTree, stageOf, counts, streak, bestStreak, activeDays, growth, placed, plant, uproot } = useGarden();
+  const onb = useOnboarding();
+  const listRef = useRef<FlatList<number>>(null);
+  const [island, setIsland] = useState({ y: 0, h: 0 });
+  const islandY = useRef(0);
+  const [scrollY, setScrollY] = useState(0);
   const [picked, setPicked] = useState<PlantId | null>(null);
+  // tour: the maple is picked up for you so the island tiles light up
+  useEffect(() => {
+    if (onb.step === 'plant') {
+      setPicked(MAPLE);
+      // bring the island to the top: the list can't be scrolled while planting
+      setTimeout(() => listRef.current?.scrollToOffset({ offset: Math.max(0, islandY.current - 8), animated: true }), 250);
+    }
+    if (onb.step === 'hizbs') setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 450);
+  }, [onb.step]);
+  const stepRef = useRef(onb.step);
+  stepRef.current = onb.step;
+  const nextRef = useRef(onb.next);
+  nextRef.current = onb.next;
   const [note, setNote] = useState('');
   const armed = picked !== null;
   const placedIds = useMemo(() => new Set(placed.filter((x): x is PlantId => !!x)), [placed]);
-  const { thumnIndex } = usePortion();
+  const { thumnIndex, mode } = usePortion();
+  const step = mode === 'rub' ? 2 : 1;
   const [selected, setSelected] = useState(thumnIndex);
 
-  const cell = Math.floor((width - 32 - 8) / PER_ROW);
+  const cell = Math.floor((width - 32 - 8) / (PER_ROW / step));
   const planted = placed.filter(Boolean).length;
   const stats = useMemo(
     () => ({
@@ -111,11 +147,14 @@ export default function GardenScreen() {
     [stageOf],
   );
 
-  // only the hizb being read and the ones already finished, newest first
+  // the hizb being read and the ones already finished, newest first. Once you reach the end of the current hizb
+  // (its last portion, or all of it done) the next hizb appears too, grayed out until you get there.
   const currentHizb = Math.floor(thumnIndex / PER_ROW);
+  const atEnd = thumnIndex % PER_ROW >= PER_ROW - step || rows[currentHizb].every((s) => s === MAX_STAGE);
+  const upcoming = atEnd && currentHizb + 1 < HIZB_COUNT ? currentHizb + 1 : -1;
   const visible = useMemo(
-    () => hizbs.filter((h) => h === currentHizb || rows[h].every((s) => s === MAX_STAGE)).sort((a, b) => b - a),
-    [rows, currentHizb],
+    () => hizbs.filter((h) => h === currentHizb || h === upcoming || rows[h].every((s) => s === MAX_STAGE)).sort((a, b) => b - a),
+    [rows, currentHizb, upcoming],
   );
 
   // read through a ref so onSlot never changes: the island (and every planted flower) then skips re-rendering
@@ -130,6 +169,7 @@ export default function GardenScreen() {
         plant(slot, pk);
         setPicked(null);
         setNote('');
+        if (stepRef.current === 'plant') setTimeout(() => nextRef.current(), 700);
       }
     },
     [plant, uproot],
@@ -137,26 +177,32 @@ export default function GardenScreen() {
 
   const onPick = useCallback(
     (id: PlantId, unlocked: boolean) => {
+      if (stepRef.current === 'plant') return; // the tour keeps the maple in hand until it is planted
       if (unlocked) {
         setPicked((p) => (p === id ? null : id));
         setNote('');
       } else {
         const h = Number(id.slice(1));
         setPicked(null);
-        setNote(`Finish Hizb ${h} to unlock the ${plantName(id)} (${growth[h - 1]}/8 thumns).`);
+        setNote(t('garden.locked', { h, name: plantName(id), g: growth[h - 1] }));
       }
     },
-    [growth],
+    [growth, t, plantName],
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <FlatList
+        ref={listRef}
+        scrollEnabled={onb.step !== 'plant'}
+        scrollEventThrottle={16}
+        onScroll={(e) => onb.step === 'plant' && setScrollY(e.nativeEvent.contentOffset.y)}
         ListHeaderComponent={
           <View>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>الحديقة</Text>
-              <Pressable onPress={toggle} style={styles.themeBtn} accessibilityLabel={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <Text style={styles.title}>{t('garden.title')}</Text>
+              <View style={styles.topBtns}>
+              <Pressable onPress={toggle} style={styles.themeBtn} accessibilityLabel={dark ? t('garden.toLight') : t('garden.toDark')}>
                 <Svg width={20} height={20} viewBox="0 0 24 24">
                   {dark ? (
                     <>
@@ -168,19 +214,24 @@ export default function GardenScreen() {
                   )}
                 </Svg>
               </Pressable>
+              <Pressable onPress={() => setSettingsOpen(true)} style={styles.themeBtn} accessibilityLabel={t('garden.settings')}>
+                <Svg width={20} height={20} viewBox="0 0 24 24">
+                  <Path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
+                  <Circle cx={16} cy={7} r={2.4} stroke={colors.accent} strokeWidth={2} fill="none" />
+                  <Circle cx={8} cy={17} r={2.4} stroke={colors.accent} strokeWidth={2} fill="none" />
+                </Svg>
+              </Pressable>
+              </View>
             </View>
             <GardenStats d={stats} />
-            <View style={styles.island}>
+            <View style={styles.island} onLayout={(e) => { islandY.current = e.nativeEvent.layout.y; setIsland({ y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height }); }}>
               <Garden3D placed={placed} width={Math.min(width - 32, 440)} armed={armed} onSlot={onSlot} />
             </View>
             <PlantShelf growth={growth} treeUnlocked={treeUnlocked} placedIds={placedIds} picked={picked} onPick={onPick} />
             <Text style={styles.hint}>
-              {note ||
-                (armed
-                  ? `Tap an empty tile to plant the ${plantName(picked!)}. Tap a planted flower to pick it up.`
-                  : 'Finish all 8 thumns of a hizb to unlock its flower.')}
+              {note || (armed ? t('garden.hintPlant', { name: plantName(picked!) }) : t('garden.hintDefault'))}
             </Text>
-            <Text style={styles.sectionTitle}>Hizb by hizb</Text>
+            <Text style={[styles.sectionTitle, rtlAlign]}>{t('garden.byHizb')}</Text>
           </View>
         }
         data={visible}
@@ -189,21 +240,25 @@ export default function GardenScreen() {
         windowSize={7}
         contentContainerStyle={styles.list}
         renderItem={({ item: h }) => (
-          <HizbRow hizb={h} stages={rows[h]} selected={selected} cell={cell} onSelect={setSelected} />
+          <HizbRow hizb={h} stages={rows[h]} step={step} selected={selected} cell={cell} onSelect={setSelected} upcoming={h === upcoming} />
         )}
       />
 
-      <Modal visible={ready && !treeUnlocked} animationType="fade" transparent statusBarTranslucent>
-        <View style={styles.unlock}>
-          <Text style={styles.unlockKicker}>A gift for your garden</Text>
-          <Text style={styles.unlockTitle}>Red maple unlocked</Text>
-          <RedTreeScene width={Math.min(width - 24, 460)} />
-          <Text style={styles.unlockText}>Every thumn you finish grows your garden. Start with this tree.</Text>
-          <Pressable style={styles.unlockBtn} onPress={unlockTree}>
-            <Text style={styles.btnText}>Plant it in my garden</Text>
-          </Pressable>
-        </View>
-      </Modal>
+      {onb.step === 'plant' && (
+        <>
+          {island.h > 0 && <Pointer style={{ position: 'absolute', alignSelf: 'center', top: insets.top + 8 + island.y - scrollY + island.h * 0.12 }} />}
+        </>
+      )}
+      {onb.step === 'hizbs' && (
+        <CoachCard
+          title={t('onb.hizbs.title')}
+          text={t('onb.hizbs.text')}
+          button={t('onb.gotIt')}
+          onPress={onb.next}
+        />
+      )}
+      <InsectLayer />
+      <SettingsScreen visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </View>
   );
 }
@@ -211,7 +266,8 @@ export default function GardenScreen() {
 const makeStyles = (colors: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.paper },
   titleRow: { justifyContent: 'center' },
-  themeBtn: { position: 'absolute', right: 16, top: 0, width: 38, height: 38, borderRadius: 19, backgroundColor: colors.paleGreen, alignItems: 'center', justifyContent: 'center' },
+  topBtns: { position: 'absolute', left: 16, top: 0, flexDirection: 'row', gap: 8 },
+  themeBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.paleGreen, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 28, color: colors.accent, textAlign: 'center', fontWeight: '600' },
   island: { marginHorizontal: 16, marginBottom: 8, alignItems: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.darkGreen, marginHorizontal: 20, marginTop: 8, marginBottom: 8 },
@@ -224,8 +280,8 @@ const makeStyles = (colors: Palette) => StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 24 },
   hizb: { marginBottom: 10 },
   hizbHead: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 2 },
-  hizbTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  hizbCount: { fontSize: 12, color: colors.textMuted },
+  hizbTitle: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  hizbCount: { flexShrink: 0, marginStart: 8, fontSize: 12, color: colors.textMuted },
   row: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, padding: 4 },
   cell: { alignItems: 'center', justifyContent: 'flex-end', borderRadius: 10, paddingBottom: 3 },
   cellSelected: { backgroundColor: colors.mint },

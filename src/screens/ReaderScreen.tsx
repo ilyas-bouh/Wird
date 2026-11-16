@@ -9,6 +9,7 @@ import PageView, { type PageViewHandle } from '../components/PageView';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import { useTheme } from '../theme/ThemeContext';
+import { useI18n } from '../i18n/I18nContext';
 import type { Palette } from '../theme/colors';
 import TafsirSheet, { SHEET_HEIGHT } from '../components/TafsirSheet';
 import { useFocusMode } from '../context/FocusContext';
@@ -18,8 +19,11 @@ import { usePortion } from '../context/PortionContext';
 import { TEXT_STYLE, TEXT_STYLE_DARK, textStyleCss } from '../theme/reading';
 import { cropSvg, headerZones, selectRange } from '../lib/cropSvg';
 import { ayahKey, hasAudio, useAyahPlayer, type AyahRef } from '../lib/useAyahPlayer';
-import { portionAt } from '../lib/ranges';
-import { swipeNavigate } from '../lib/swipeNav';
+import { portionAt, type Portion } from '../lib/ranges';
+import { useOnboarding } from '../context/OnboardingContext';
+import { CoachCard } from '../components/CoachMark';
+import { swipeNavigate, swipeNavigateTo } from '../lib/swipeNav';
+import { svgFromBr } from '../lib/brotli';
 import pageInk from '../data/pageInk.json';
 import { BUNDLED_PAGES, PAGE_JSONS, PAGE_SVGS } from '../data/pageAssets';
 
@@ -29,17 +33,29 @@ const INK_TOP = pageInk as Record<string, number>;
 
 async function loadSvg(module: number) {
   const asset = Asset.fromModule(module);
-  if (Platform.OS === 'web') return (await fetch(asset.uri)).text();
+  if (Platform.OS === 'web') return svgFromBr(new Uint8Array(await (await fetch(asset.uri)).arrayBuffer()));
   await asset.downloadAsync();
-  return new File(asset.localUri ?? asset.uri).text();
+  return svgFromBr(new Uint8Array(await new File(asset.localUri ?? asset.uri).arrayBuffer()));
 }
 
 type Seal = { text: SealText; done: boolean };
+/** Onboarding mode of the page: 'read' pins a pulsing seal to the bottom and hides everything else; 'ayah' hides the seal. */
+type Onb = { mode: 'read' | 'ayah'; title: string; text: string } | null;
 
-function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, colors: Palette, seal: Seal) {
+/** Al-Fatiha alone, shown during the first-run tour. */
+const FATIHA: Portion = {
+  mode: 'thumn', n: 1,
+  start: { surah: 1, ayah: 1, id: 1, page: 1 },
+  end: { surah: 1, ayah: 7, id: 7, page: 1 },
+};
+
+type Nav = { label: string; enabled: boolean; prevLabel: string; hasPrev: boolean; lockedHint: string };
+
+/** Next and back stay locked until today's portion is sealed (`seal.done`); sealing it unlocks them in place. */
+function buildHtml(svgs: string[], next: Nav, colors: Palette, seal: Seal, onb: Onb = null) {
   const pages = svgs.map((s) => `<section class="page">${s.replace(/<\?xml[^>]*\?>/, '')}</section>`).join('');
   const sealHtml = `<div class="seal-wrap" dir="rtl">
-  <button id="seal" class="seal${seal.done ? ' in done instant' : ''}" aria-label="${seal.text.title}">
+  <button id="seal" class="seal${seal.done ? ' in done instant' : onb?.mode === 'read' ? ' in' : ''}" aria-label="${seal.text.title}">
     <span class="shine"></span>
     <svg class="star" viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,3 97,50 50,97 3,50"/><polygon points="19,19 81,19 81,81 19,81"/></svg>
     <span class="body">
@@ -51,8 +67,11 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, co
     </span>
   </button>
   <div class="burst"></div>
-</div>`;
-  const button = `<div class="next"><button id="next" ${next.enabled ? '' : 'disabled'}>${next.label}</button></div>`;
+</div>`.replace('<div class="seal-wrap" dir="rtl">', onb?.mode === 'read'
+    ? `<div class="seal-wrap" dir="rtl"><div class="coach"><b>${onb.title}</b><span>${onb.text}</span><svg class="arrow" viewBox="0 0 24 24"><path d="M12 3v15M5.5 12.5 12 19l6.5-6.5"/></svg></div>`
+    : '<div class="seal-wrap" dir="rtl">');
+  const ok = (can: boolean) => `data-ok="${can ? 1 : 0}" ${can && seal.done ? '' : 'disabled'}`;
+  const button = `<div class="next"><div class="navrow"><button id="prev" ${ok(next.hasPrev)}>${next.prevLabel}</button><button id="next" ${ok(next.enabled)}>${next.label}</button></div><p id="lock"${seal.done ? ' hidden' : ''}>${next.lockedHint}</p></div>`;
   return `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -112,8 +131,29 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, co
   #next { background: transparent; color: ${colors.textMuted}; opacity: .5; font-size: 13px; padding: 10px 14px;
           border-radius: 10px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
           font-family: sans-serif; transition: opacity .25s ease; }
-  #next:active { opacity: .9; }
-  #next[disabled] { background: transparent; opacity: .28; text-decoration: none; }
+  #prev { background: transparent; color: ${colors.textMuted}; opacity: .5; font-size: 13px; padding: 10px 14px;
+          border-radius: 10px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+          font-family: sans-serif; transition: opacity .25s ease; }
+  #next:active, #prev:active { opacity: .9; }
+  #next[disabled], #prev[disabled] { background: transparent; opacity: .28; text-decoration: none; }
+  .navrow { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  #lock { margin: 6px 0 0; font: 12px sans-serif; color: ${colors.textMuted}; opacity: .8; line-height: 1.5; }
+${onb ? `
+  /* ---- first-run tour: no next/back, and the seal is pinned to the bottom, pulsing, impossible to miss ---- */
+  .next { display: none; }
+  body { padding-bottom: ${onb.mode === 'read' ? 300 : 120}px; }
+  ${onb.mode === 'ayah' ? '.seal-wrap { display: none; }' : `
+  .seal-wrap { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; flex-direction: column; align-items: center; padding: 56px 18px 26px;
+               background: linear-gradient(to bottom, transparent, ${colors.paper} 38%); }
+  .seal { zoom: .7; animation: pulse 1.5s ease-out infinite !important; }
+  .seal.done { animation: breathe-gold 3.4s ease-in-out infinite !important; }
+  .coach { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 8px; text-align: center; font-family: sans-serif; direction: ltr; }
+  .coach b { font-size: 19px; color: ${colors.darkGreen}; }
+  .coach span { font-size: 14px; color: ${colors.textMuted}; line-height: 1.5; }
+  .coach .arrow { width: 34px; height: 34px; fill: none; stroke: ${colors.accent}; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; animation: bob .9s ease-in-out infinite alternate; }
+  .seal-wrap:has(.done) .coach { display: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 ${colors.accent}, 0 18px 38px -14px ${colors.accent}; } 80%,100% { box-shadow: 0 0 0 30px transparent, 0 18px 38px -14px ${colors.accent}; } }
+  @keyframes bob { from { transform: translateY(-5px); } to { transform: translateY(7px); } }`}` : ''}
 </style></head><body>${pages}${sealHtml}${button}
 <script>
   // Native: React Native WebView bridge; web: the page runs in an iframe and posts to its parent.
@@ -145,11 +185,14 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, co
         box.appendChild(p);
       }
       setTimeout(function () { box.innerHTML = ''; }, 1400);
+      // today's portion is done: next / back open up
+      document.querySelectorAll('#prev[data-ok="1"], #next[data-ok="1"]').forEach(function (b) { b.disabled = false; });
+      var lock = document.getElementById('lock'); if (lock) lock.hidden = true;
       post('done');
     });
   }
-  var b = document.getElementById('next');
-  b.addEventListener('click', function (e) { e.stopPropagation(); post('next'); });
+  document.getElementById('next').addEventListener('click', function (e) { e.stopPropagation(); post('next'); });
+  document.getElementById('prev').addEventListener('click', function (e) { e.stopPropagation(); post('prev'); });
 
   // Tap an ayah to highlight it (tap it again to clear); tapping anywhere else toggles focus mode.
   // wirdSetCurrent(key, scroll) is also called from the app to follow the audio.
@@ -194,6 +237,7 @@ function buildHtml(svgs: string[], next: { label: string; enabled: boolean }, co
 
 export default function ReaderScreen() {
   const { colors } = useTheme();
+  const { t, lang } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { thumnIndex: index, setThumnIndex: setIndex, mode } = usePortion(); // portion setting, shared with the Tafsir tab
   const step = mode === 'rub' ? 2 : 1; // thumn steps per portion
@@ -203,10 +247,13 @@ export default function ReaderScreen() {
   const isFocused = useIsFocused();
   const { focused, setFocused } = useFocusMode();
   const { finish, stageOf } = useGarden();
+  const onb = useOnboarding();
+  const tour = onb.step === 'read' || onb.step === 'ayah' ? onb.step : null;
 
   const webRef = useRef<PageViewHandle>(null);
   const [ayahs, setAyahs] = useState<AyahRef[]>([]);
   const selected = useRef<string | null>(null); // ayah the user last tapped
+  const [cardH, setCardH] = useState(0); // height of the tour card, so the page starts below it
   const [tafsirKey, setTafsirKey] = useState<string | null>(null); // ayah whose tafsir sheet is open
 
   // Move the page highlight (and scroll) to the ayah being recited.
@@ -214,7 +261,7 @@ export default function ReaderScreen() {
     const arg = a ? JSON.stringify(ayahKey(a)) : 'null';
     webRef.current?.inject(`window.wirdSetCurrent(${arg}, true); true;`);
   };
-  const player = useAyahPlayer(ayahs, follow);
+  const player = useAyahPlayer(ayahs, follow, tour === 'ayah');
 
   // Entering the Reader starts in focus mode (no tab bar, no status bar).
   useEffect(() => {
@@ -233,7 +280,7 @@ export default function ReaderScreen() {
         selected.current = null;
         setTafsirKey(null);
         setHtml(null);
-        const { start, end } = portionAt(mode, index);
+        const { start, end } = tour ? FATIHA : portionAt(mode, index);
         const out: string[] = [];
         const list: AyahRef[] = [];
         for (let p = start.page; p <= end.page; p++) {
@@ -248,19 +295,27 @@ export default function ReaderScreen() {
           out.push(cropSvg(svg, inRange.map((e) => e.polygon), { width: STRIP_WIDTH, zones, cover: others, paper: colors.paper }));
         }
         const first = Math.floor(index / step) * step; // the portion's thumns: one in thomon mode, two in rub' mode
-        const done = Array.from({ length: step }, (_, k) => first + k).every((i) => stageOf(i) === MAX_STAGE);
+        const done = tour ? tour === 'ayah' : Array.from({ length: step }, (_, k) => first + k).every((i) => stageOf(i) === MAX_STAGE);
         const nextIndex = first + step;
         const next = nextIndex < 480 ? portionAt(mode, nextIndex) : null;
-        const noun = mode === 'rub' ? "rub'" : 'thomon';
+        const noun = t(mode === 'rub' ? 'reader.noun.rub' : 'reader.noun.thumn');
         const hasNext = !!next && next.end.page <= BUNDLED_PAGES;
         const label = !next
-          ? 'End of the Quran'
+          ? t('reader.end')
           : hasNext
-            ? `Next ${noun} (${next.n})`
-            : `${noun[0].toUpperCase()}${noun.slice(1)} ${next.n}: pages not bundled yet`;
+            ? t('reader.next', { noun, n: next.n })
+            : t('reader.notBundled', { noun, n: next.n });
+        const first0 = first; // previous portion starts one step back
+        const prevIndex = first0 - step;
+        const prev = prevIndex >= 0 ? portionAt(mode, prevIndex) : null;
+        const prevLabel = prev ? t('reader.prev', { noun, n: prev.n }) : '';
         if (!cancelled) {
           setAyahs(list);
-          setHtml(buildHtml(out, { label, enabled: hasNext }, colors, { text: sealText(mode, portionAt(mode, index).n), done }));
+          const text: SealText = tour
+            ? { title: t('onb.read.seal.t'), sub: t('onb.read.seal.s'), doneTitle: t('seal.doneTitle'), doneSub: t('seal.doneSub') }
+            : sealText(t, mode, portionAt(mode, index).n);
+          setHtml(buildHtml(out, { label, enabled: hasNext, prevLabel, hasPrev: !!prev, lockedHint: t('reader.locked') }, colors, { text, done },
+            tour ? { mode: tour, title: t('onb.read.title'), text: t('onb.read.text') } : null));
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -270,11 +325,31 @@ export default function ReaderScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, mode, colors]);
+  }, [index, mode, colors, lang, tour]);
 
   const onMessage = (msg: string) => {
-    if (msg === 'next') setIndex((i) => Math.floor(i / step) * step + step);
-    else if (msg === 'done') {
+    if (tour) {
+      // first-run tour: only the seal (step 'read') and tapping an ayah (step 'ayah') do anything
+      if (msg === 'done' && tour === 'read') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setTimeout(() => {
+          onb.next(); // the maple gift fades in over the Reader; the Garden opens unseen behind it
+        }, 600);
+      } else if (msg.startsWith('ayah:') && tour === 'ayah') {
+        selected.current = msg.slice(5) || null;
+        setTafsirKey(selected.current);
+        if (selected.current) player.jumpTo(selected.current);
+      }
+      return;
+    }
+    // next / back only work once today's portion is sealed (the page keeps them disabled until then; this is the safety net)
+    const first = Math.floor(index / step) * step;
+    const sealed = Array.from({ length: step }, (_, k) => first + k).every((i) => stageOf(i) === MAX_STAGE);
+    if (msg === 'next') {
+      if (sealed) setIndex(first + step);
+    } else if (msg === 'prev') {
+      if (sealed && first - step >= 0) setIndex(first - step);
+    } else if (msg === 'done') {
       // the completion seal: a little buzz, and the whole portion grows its plant
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       const first = Math.floor(index / step) * step;
@@ -313,28 +388,42 @@ export default function ReaderScreen() {
     );
   }
   return (
-    <View style={[styles.container, { paddingTop: topPad }]}>
-      <PageView ref={webRef} key={`${mode}-${index}`} html={html} onMessage={onMessage} style={styles.web} />
+    <View style={[styles.container, { paddingTop: topPad + (tour === 'ayah' ? cardH + 8 : 0) }]}>
+      <PageView ref={webRef} key={`${mode}-${index}-${tour ?? ''}`} html={html} onMessage={onMessage} style={styles.web} />
       {ayahs.some(hasAudio) && (
         <View
           style={[styles.player, { bottom: insets.bottom + 24 + (tafsirKey ? SHEET_HEIGHT : 0) }]}
           pointerEvents="box-none"
         >
           {player.state !== 'idle' && (
-            <Pressable onPress={player.stop} style={[styles.fab, styles.fabSmall]} accessibilityLabel="Stop">
+            <Pressable onPress={player.stop} style={[styles.fab, styles.fabSmall]} accessibilityLabel={t('reader.stop')}>
               <Text style={styles.fabText}>■</Text>
             </Pressable>
           )}
           <Pressable
             onPress={() => player.toggle(selected.current)}
             style={styles.fab}
-            accessibilityLabel={player.state === 'playing' ? 'Pause' : 'Play'}
+            accessibilityLabel={player.state === 'playing' ? t('reader.pause') : t('reader.play')}
           >
             <Text style={styles.fabText}>{player.state === 'playing' ? '❚❚' : '▶'}</Text>
           </Pressable>
         </View>
       )}
       <TafsirSheet ayahKey={tafsirKey} onClose={closeTafsir} />
+      {tour === 'ayah' && (
+        <CoachCard
+          top={topPad}
+          onHeight={setCardH}
+          title={t('onb.ayah.title')}
+          text={tafsirKey ? t('onb.ayah.text2') : t('onb.ayah.text')}
+          button={t('onb.continue')}
+          onPress={() => {
+            closeTafsir();
+            player.stop();
+            onb.next(); // on to the seal
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import type { Palette } from '../theme/colors';
 import { fonts } from '../theme/fonts';
+import { useI18n } from '../i18n/I18nContext';
 import { EDITIONS, getTafsir, type TafsirLang, type TafsirSection } from '../lib/tafsir';
 
 export const SHEET_HEIGHT = 340;
@@ -13,9 +14,10 @@ type Props = { ayahKey: string | null; onClose: () => void };
 /** Bottom drawer with the tafsir of the tapped ayah: Al-Muyassar (Arabic) or Al-Mukhtasar (English). */
 export default function TafsirSheet({ ayahKey, onClose }: Props) {
   const { colors } = useTheme();
+  const { t, rtl: uiRtl, lang: uiLang } = useI18n();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
-  const [lang, setLang] = useState<TafsirLang>('ar');
+  const [lang, setLang] = useState<TafsirLang>(uiLang);
   const [sections, setSections] = useState<TafsirSection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState<string | null>(null); // keeps the title while sliding out
@@ -38,11 +40,11 @@ export default function TafsirSheet({ ayahKey, onClose }: Props) {
     setError(null);
     getTafsir(lang, ayahKey)
       .then((s) => !cancelled && setSections(s))
-      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
+      .catch(() => !cancelled && setError(t('tafsir.unavailable')));
     return () => {
       cancelled = true;
     };
-  }, [ayahKey, lang]);
+  }, [ayahKey, lang, t]);
 
   const rtl = lang === 'ar';
 
@@ -52,8 +54,8 @@ export default function TafsirSheet({ ayahKey, onClose }: Props) {
       style={[styles.sheet, { height: SHEET_HEIGHT + insets.bottom, paddingBottom: insets.bottom, transform: [{ translateY: slide }] }]}
     >
       <View style={styles.handle} />
-      <View style={styles.header}>
-        <Text style={styles.title}>Tafsir · {shown?.replace(':', ' : ')}</Text>
+      <View style={[styles.header, uiRtl && { flexDirection: 'row-reverse' }]}>
+        <Text style={[styles.title, uiRtl && { textAlign: 'right' }]}>{t('tafsir.sheetTitle', { key: shown?.replace(':', ' : ') ?? '' })}</Text>
         <View style={styles.langs}>
           {(['ar', 'en'] as const).map((l) => (
             <Pressable key={l} onPress={() => setLang(l)} style={[styles.pill, lang === l && styles.pillActive]}>
@@ -61,7 +63,7 @@ export default function TafsirSheet({ ayahKey, onClose }: Props) {
             </Pressable>
           ))}
         </View>
-        <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close tafsir">
+        <Pressable onPress={onClose} hitSlop={12} accessibilityLabel={t('tafsir.close')}>
           <Text style={styles.close}>✕</Text>
         </Pressable>
       </View>
@@ -75,7 +77,7 @@ export default function TafsirSheet({ ayahKey, onClose }: Props) {
         ))}
         {sections && (
           <Text style={styles.note}>
-            {EDITIONS[lang].label}. Where Warsh and Hafs divide the verses differently, the tafsir covers the neighbouring ayah too.
+            {EDITIONS[lang].label}. {t('tafsir.sheetNote')}
           </Text>
         )}
       </ScrollView>

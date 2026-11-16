@@ -139,10 +139,8 @@ export function GardenProvider({ children }: { children: ReactNode }) {
   const unlockTree = useCallback(() => {
     setS((p) => {
       if (p.treeUnlocked) return p;
-      const centre = Math.floor(SLOTS / 2);
-      const placed = [...p.placed];
-      if (!placed[centre] && !placed.includes(MAPLE)) placed[centre] = MAPLE;
-      return { ...p, treeUnlocked: true, placed };
+      // the maple is only unlocked here: the first-run tour then asks the user to plant it
+      return { ...p, treeUnlocked: true };
     });
   }, []);
 
